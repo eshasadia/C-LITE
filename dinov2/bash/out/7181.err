@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/visualize/attention_vis.py", line 7, in <module>
-    from dinov2.eval.setup import build_model_for_eval  # or however you normally build the backbone in eval
-ModuleNotFoundError: No module named 'dinov2.eval.setup'
