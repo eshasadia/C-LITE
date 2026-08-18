@@ -1,0 +1,31 @@
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W818 13:15:48.519429051 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/visualize/compute_pca.py", line 135, in <module>
+[rank0]:     plt.savefig(f"{OUTPUT_DIR}/pca.png", bbox_inches="tight")
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/pyplot.py", line 1250, in savefig
+[rank0]:     res = fig.savefig(*args, **kwargs)  # type: ignore[func-returns-value]
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/figure.py", line 3490, in savefig
+[rank0]:     self.canvas.print_figure(fname, **kwargs)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/backend_bases.py", line 2186, in print_figure
+[rank0]:     result = print_method(
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/backend_bases.py", line 2042, in <lambda>
+[rank0]:     print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/backends/backend_agg.py", line 481, in print_png
+[rank0]:     self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/backends/backend_agg.py", line 430, in _print_pil
+[rank0]:     mpl.image.imsave(
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/matplotlib/image.py", line 1657, in imsave
+[rank0]:     image.save(fname, **pil_kwargs)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/PIL/Image.py", line 2566, in save
+[rank0]:     fp = builtins.open(filename, "w+b")
+[rank0]: FileNotFoundError: [Errno 2] No such file or directory: '/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/output_visuals/pca/7999/pca.png'
+[rank0]:[W818 13:15:49.820225187 ProcessGroupNCCL.cpp:1479] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/dcs/pg23/u5552013/.local/lib/python3.9/site-packages/torchvision/__init__.py", line 10, in <module>
+    from torchvision import _meta_registrations, datasets, io, models, ops, transforms, utils  # usort:skip
+  File "/dcs/pg23/u5552013/.local/lib/python3.9/site-packages/torchvision/datasets/__init__.py", line 1, in <module>
+    from ._optical_flow import FlyingChairs, FlyingThings3D, HD1K, KittiFlow, Sintel
+  File "/dcs/pg23/u5552013/.local/lib/python3.9/site-packages/torchvision/datasets/_optical_flow.py", line 10, in <module>
+    from PIL import Image
+ModuleNotFoundError: No module named 'PIL'
+Traceback (most recent call last):
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/linear_probe_dino2.py", line 22, in <module>
+    import h5py
+ModuleNotFoundError: No module named 'h5py'

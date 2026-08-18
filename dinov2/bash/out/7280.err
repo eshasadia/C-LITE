@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/linear_probe_dino2.py", line 304, in <module>
+    main()
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/linear_probe_dino2.py", line 279, in main
+    train_ds = HDF5FeatureDataset(args.train_features)
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/linear_probe_dino2.py", line 37, in __init__
+    with h5py.File(h5_path, "r") as hf:
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/h5py/_hl/files.py", line 555, in __init__
+    fid = make_fid(name, mode, userblock_size, fapl, fcpl, swmr=swmr)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/h5py/_hl/files.py", line 232, in make_fid
+    fid = h5f.open(name, flags, fapl=fapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5f.pyx", line 106, in h5py.h5f.open
+FileNotFoundError: [Errno 2] Unable to synchronously open file (unable to open file: name = '/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/conic/cellvitpp_weights_CellViT-SAM-H-x40-AMP/train_features.h5', errno = 2, error message = 'No such file or directory', flags = 0, o_flags = 0)

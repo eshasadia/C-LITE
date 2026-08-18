@@ -40,3 +40,4 @@ Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2
 Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
 Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
 Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+slurmstepd: error: *** JOB 7178 ON tia-dgxa100 CANCELLED AT 2026-08-18T17:16:27 ***

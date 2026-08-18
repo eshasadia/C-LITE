@@ -1,0 +1,38 @@
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+httpx.HTTPStatusError: Client error '403 Forbidden' for url 'https://huggingface.co/bioptimus/H0-mini/resolve/main/config.json'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/feature_extraction.py", line 832, in <module>
+    main(args)
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/feature_extraction.py", line 751, in main
+    feature_extractor = get_models(
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/models/return_model.py", line 128, in get_models
+    model = HistoPLUS(saved_model_path)
+  File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/models/histoplus.py", line 79, in __init__
+    self.encoder = timm.create_model(
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/timm/models/_factory.py", line 102, in create_model
+    pretrained_cfg, model_name, model_args = load_model_config_from_hf(model_name)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/timm/models/_hub.py", line 138, in load_model_config_from_hf
+    cached_file = download_from_hf(model_id, 'config.json')
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/timm/models/_hub.py", line 133, in download_from_hf
+    return hf_hub_download(hf_model_id, filename, revision=hf_revision)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/huggingface_hub/file_download.py", line 1019, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/huggingface_hub/file_download.py", line 1166, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/huggingface_hub/file_download.py", line 1904, in _raise_on_head_call_error
+    raise head_call_error
+huggingface_hub.errors.GatedRepoError: 403 Client Error. (Request ID: Root=1-6a845cb1-79bcc3f2013c28471419352c;a8998bc1-3f11-426c-8408-690b865e51bb)
+
+Cannot access gated repo for url https://huggingface.co/bioptimus/H0-mini/resolve/main/config.json.
+Your request to access model bioptimus/H0-mini is awaiting a review from the repo authors.
