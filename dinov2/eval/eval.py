@@ -144,24 +144,6 @@ def get_data(args):
 
     return train_data, train_labels, test_data, test_labels
 
-
-def test_data_creation():
-    # Create synthetic data
-    num_samples = 100  # Number of samples in the synthetic dataset
-    num_features = 100  # Number of features per sample
-
-    # Generate random synthetic data
-    synthetic_data = np.random.rand(num_samples, num_features)
-
-    # Generate random synthetic labels
-    synthetic_labels = np.random.randint(0, 2, size=num_samples)  # Binary classification example
-
-    # Split the synthetic data into a smaller train and test set
-    train_data, test_data, train_labels, test_labels = train_test_split(synthetic_data, synthetic_labels, test_size=0.2)
-
-    return train_data, train_labels, test_data, test_labels
-
-
 def compute_f1_scores(y_true, y_pred):
     """
     Compute macro F1 (overall), weighted F1, and per-class F1 scores
@@ -670,13 +652,11 @@ def train_and_evaluate_logistic_regression(
 
 def main(args):
     train_data, train_labels, test_data, test_labels = get_data(args)
-    # train_data, train_labels, test_data, test_labels = test_data_creation()
     print("data fully loaded")
     print("Shape of train_data:", train_data.shape)
     print("Shape of train_labels:", train_labels.shape)
     print("Shape of test_data:", test_data.shape)
     print("Shape of test_labels:", test_labels.shape)
-   # Quick check
     print("\n=== Quick Class Check ===")
     _, train_ids = load_combined_features(os.path.join(args.path_folder, "train_data", "train_features.h5"))[1:3]
     for label in sorted(np.unique(train_labels)):

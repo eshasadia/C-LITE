@@ -49,12 +49,23 @@ def collate_data_and_cast(samples_list, mask_ratio_tuple, mask_probability, dtyp
         "upperbound": upperbound,
         "n_masked_patches": torch.full((1,), fill_value=mask_indices_list.shape[0], dtype=torch.long),
     }
+
+
+ 
+ 
 def collate_morph_data_and_cast(samples_list, **collate_data_and_cast_kwargs):
     collated = collate_data_and_cast(samples_list, **collate_data_and_cast_kwargs)
+    n_global_crops = len(samples_list[0][0]["global_morph_feats"])
+    n_local_crops = len(samples_list[0][0]["local_morph_feats"])
     collated["collated_global_morph_feats"] = torch.stack(
-        [feat for s in samples_list for feat in s[0]["global_morph_feats"]]
+        [s[0]["global_morph_feats"][c] for c in range(n_global_crops) for s in samples_list]
     )
     collated["collated_local_morph_feats"] = torch.stack(
-        [feat for s in samples_list for feat in s[0]["local_morph_feats"]]
+        [s[0]["local_morph_feats"][c] for c in range(n_local_crops) for s in samples_list]
     )
+    collated["collated_global_nucleus_masks"] = torch.stack(
+        [s[0]["global_masks"][c] for c in range(n_global_crops) for s in samples_list]
+    )
+ 
     return collated
+ 

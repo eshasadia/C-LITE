@@ -1,6 +1,7 @@
 import logging
 import math
 from functools import partial
+import numpy as np
 import torch
 from dinov2.fsdp import ShardedGradScaler, get_fsdp_modules, get_fsdp_wrapper, reshard_fsdp_model
 from dinov2.layers import DINOHead
@@ -21,6 +22,11 @@ except ImportError:
 
 
 logger = logging.getLogger("dinov2")
+
+# Same normalization the augmentation pipeline applies (ImageNet mean/std) --
+# needed to denormalize crops back to viewable RGB for wandb logging.
+_VIS_IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+_VIS_IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 
 def smooth_rank_loss(embedding_matrix, eps=1e-7):
@@ -73,18 +79,41 @@ def interpolate_pos_encoding(x, w, h):
     return torch.cat((x[:, :1], patch_pos_embed), dim=1)
 
 
+def _bilinear_resize_matrix(src_size, dst_size, device, dtype, mode="bicubic", antialias=True):
+    """Builds the linear operator B such that resizing a flattened src_size x
+    src_size 'image' equals B @ flat_image. antialias=True matters here
+    because this is almost always *downsampling* (e.g. 14 -> 8); without
+    it, F.interpolate point-samples instead of properly box-filtering,
+    which makes B (and thus PI-resize's pinv of B) noisy and unstable.
+    Despite the function name (kept for backward compatibility with
+    callers), the default mode is bicubic, not bilinear -- bicubic with
+    antialiasing is what actually gets used unless overridden."""
+    src = torch.eye(src_size * src_size, device=device, dtype=dtype).reshape(
+        src_size * src_size, 1, src_size, src_size)
+    resized = nn.functional.interpolate(src, size=(dst_size, dst_size), mode=mode,
+                                         align_corners=False, antialias=antialias)
+    B = resized.reshape(src_size * src_size, dst_size * dst_size).T  # (dst^2, src^2)
+    return B
+
+
 def pi_resize_patch_kernel(kernel, target_size):
     """FlexiViT-style PI-resize: reshapes a square conv kernel to
     target_size x target_size while preserving its function under resizing
-    (not just its shape, unlike plain bicubic interpolation of the weights)."""
+    (not just its shape, unlike plain bicubic interpolation of the weights).
+    Implicitly assumes patches are drawn from an isotropic (white-noise,
+    Sigma=I) distribution -- if you have real patch statistics available,
+    a covariance-weighted PI-resize gives a more accurate transplant, but
+    this unweighted version is what's wired into the backbone loader below."""
     out_ch, in_ch, kh, kw = kernel.shape
     assert kh == kw, "PI-resize as implemented here assumes a square kernel"
     if kh == target_size:
         return kernel
-    src = torch.eye(kh * kh, device=kernel.device, dtype=kernel.dtype).reshape(kh * kh, 1, kh, kh)
-    resized = nn.functional.interpolate(src, size=(target_size, target_size), mode="bilinear", align_corners=False)
-    B = resized.reshape(kh * kh, target_size * target_size).T  # (target^2, kh^2)
-    P = torch.linalg.pinv(B.T)  # (target^2, kh^2), the PI-resize transform matrix
+    B = _bilinear_resize_matrix(kh, target_size, kernel.device, kernel.dtype)  # (target^2, kh^2)
+    # rcond=1e-4 regularizes the pseudo-inverse against ill-conditioning --
+    # without it, near-zero singular values in B (more likely without
+    # antialiasing, but possible regardless) can blow up small numerical
+    # noise into large, spurious values in the resized kernel.
+    P = torch.linalg.pinv(B.T, rcond=1e-4)  # (target^2, kh^2), the PI-resize transform matrix
     flat = kernel.reshape(out_ch * in_ch, kh * kh)  # (out*in, kh^2)
     resized_flat = flat @ P.T  # (out*in, target^2)
     return resized_flat.reshape(out_ch, in_ch, target_size, target_size)
@@ -122,6 +151,18 @@ def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14", patch_size=1
             model.patch_embed.patch_size = (patch_size, patch_size)
         if hasattr(model.patch_embed, "img_size"):
             model.patch_embed.img_size = (img_size, img_size)
+        # CRITICAL: DinoVisionTransformer.interpolate_pos_encoding divides by
+        # self.patch_size (a top-level model attribute, separate from
+        # patch_embed.patch_size above) whenever the input token count
+        # doesn't already match self.pos_embed's stored size -- i.e. for any
+        # crop resolution other than the one pos_embed was initialized for
+        # (global_crops_size here). Leaving this stale at the checkpoint's
+        # original patch_size silently produces the wrong token grid for
+        # every OTHER resolution (local crops), while global crops happen to
+        # hit interpolate_pos_encoding's "already matches, return as-is"
+        # shortcut and never exercise the broken math at all.
+        if hasattr(model, "patch_size"):
+            model.patch_size = patch_size
 
     grid_side = img_size // patch_size
     tensor_corr_shape = interpolate_pos_encoding(model.pos_embed, grid_side, grid_side)
@@ -344,14 +385,6 @@ class SSLMetaArch(nn.Module):
             else:
                 logger.info("OPTIONS -- IBOT -- head shared with DINO")
 
-        # --- morphology-aware structure block + FeatureSharpener -------------
-        # NOTE: the struct token is *added* to the cls token (not concatenated),
-        # so embed_dim is unchanged and dino_head/ibot_head above don't need a
-        # doubled in_dim. This also keeps local-crop cls tokens (which never go
-        # through the structure block -- see forward_backward) dimensionally
-        # compatible with global-crop cls tokens inside the same xFormers
-        # BlockDiagonalMask batch, and keeps the shared dino/ibot-head buffer
-        # path (ibot_separate_head=False) intact.
         if self.do_morphology:
             student_model_dict["structure_block"] = StructureAttentionBlock(
                 embed_dim, use_morphology_bias=(cfg.morphology.mode == "morph")
@@ -400,9 +433,6 @@ class SSLMetaArch(nn.Module):
         n_masked_patches = mask_indices_list.shape[0]
         upperbound = images["upperbound"]
         masks_weight = images["masks_weight"].cuda(non_blocking=True)
-
-        # --- morphology feats for the global crops, same batch order as
-        # collated_global_crops (see collate_morph_data_and_cast) -----------
         morph_feats = None
         if self.do_morphology:
             morph_feats = images["collated_global_morph_feats"].cuda(non_blocking=True)
@@ -424,11 +454,18 @@ class SSLMetaArch(nn.Module):
             teacher_cls_tokens = teacher_backbone_output_dict["x_norm_clstoken"]
             ibot_teacher_patch_tokens = teacher_backbone_output_dict["x_norm_patchtokens"]
 
-            # --- fuse in the morphology structure token, BEFORE the
-            # chunk/reverse/cat below, so morph_feats (still in original
-            # collated-crop order) lines up with teacher_cls_tokens/patch
-            # tokens (also still in that order at this point) -------------
             if self.do_morphology:
+                assert morph_feats.shape[0] == ibot_teacher_patch_tokens.shape[0], (
+                    f"[teacher] batch size mismatch: morph_feats {morph_feats.shape} vs "
+                    f"patch_tokens {ibot_teacher_patch_tokens.shape}"
+                )
+                assert morph_feats.shape[1] == ibot_teacher_patch_tokens.shape[1], (
+                    f"[teacher] patch count mismatch: morph_feats has {morph_feats.shape[1]} rows, "
+                    f"patch_tokens has {ibot_teacher_patch_tokens.shape[1]} -- check that "
+                    f"collated_global_morph_feats' per-sample patch grid (from "
+                    f"MorphAwareDataAugmentationDINO, sized by global_crops_size // patch_size) "
+                    f"actually matches the backbone's real patch grid for this crop size"
+                )
                 _, struct_tok_teacher, _, _ = self.teacher.structure_block(
                     ibot_teacher_patch_tokens, morph_feats
                 )
@@ -544,6 +581,17 @@ class SSLMetaArch(nn.Module):
         ibot_student_patch_tokens = student_global_backbone_output_dict["x_norm_patchtokens"]
 
         if self.do_morphology:
+            assert morph_feats.shape[0] == ibot_student_patch_tokens.shape[0], (
+                f"[student] batch size mismatch: morph_feats {morph_feats.shape} vs "
+                f"patch_tokens {ibot_student_patch_tokens.shape}"
+            )
+            assert morph_feats.shape[1] == ibot_student_patch_tokens.shape[1], (
+                f"[student] patch count mismatch: morph_feats has {morph_feats.shape[1]} rows, "
+                f"patch_tokens has {ibot_student_patch_tokens.shape[1]} -- check that "
+                f"collated_global_morph_feats' per-sample patch grid (from "
+                f"MorphAwareDataAugmentationDINO, sized by global_crops_size // patch_size) "
+                f"actually matches the backbone's real patch grid for this crop size"
+            )
             _, struct_tok_student, _, _ = self.student.structure_block(
                 ibot_student_patch_tokens, morph_feats
             )
@@ -680,6 +728,186 @@ class SSLMetaArch(nn.Module):
                 setattr(self.teacher.dino_head, attr, stream)
                 setattr(self.student.backbone, attr, stream)
             self.need_to_synchronize_fsdp_streams = False
+
+    @torch.no_grad()
+    def get_morphology_visualization(self, images, n_samples=4):
+        """Visualization-only, no-grad, NOT part of forward_backward -- safe
+        to call at any point in the training loop (e.g. every N iterations)
+        without affecting gradients, optimizer state, or the teacher EMA.
+
+        Runs the student backbone + structure_block on the first n_samples
+        global crops in this batch, purely to inspect what the morphology
+        bias is doing.
+
+        Returns None if cfg.morphology.enabled is False. Otherwise returns:
+            crops_np:  (n, H, W, 3) uint8, denormalized RGB crops
+            raw_mask:  (n, H, W) float32 in {0,1}, the FULL-RESOLUTION
+                       nucleus mask (same H x W as the crop) -- or None if
+                       the collate function wasn't updated to carry
+                       collated_global_nucleus_masks through (older
+                       collate_morph_data_and_cast without that key)
+            morph_cov: (n, side, side) float32, the coarse 8x8-ish
+                       patch-coverage channel actually fed to the model
+                       (channel 0 of collated_global_morph_feats)
+            attn_grid: (n, side, side) float32, the struct token's own
+                       attention over patches (query=struct, key=patches)
+            attn_mask_corr: (n,) float32, Pearson correlation between
+                       attn_grid and morph_cov, flattened, per sample.
+                       +1 = attention perfectly tracks coverage, -1 =
+                       attention is exactly anti-correlated with coverage
+                       (attends AWAY from the nucleus), 0 = no relationship.
+                       This is the actual quantitative answer to "is
+                       struct-token attention doing what it should" --
+                       don't rely on eyeballing the panels for this, log
+                       the mean of this array as a wandb scalar every step.
+            lam: float, current value of exp(structure_block.log_lambda) --
+                       the morphology bias strength. If this stays near
+                       its init (1.0) while attn_mask_corr moves, the bias
+                       term itself isn't what's changing; if lam grows
+                       while attn_mask_corr stays flat or negative, the
+                       bias is being outweighed by the learned
+                       content-based attention term, which is possible
+                       even with a strictly positive bias (see
+                       structure_block.py's docstring on this).
+        """
+        if not self.do_morphology:
+            return None
+
+        global_crops = images["collated_global_crops"].cuda(non_blocking=True)
+        morph_feats = images["collated_global_morph_feats"].cuda(non_blocking=True)
+        n = min(n_samples, global_crops.shape[0])
+
+        crops = global_crops[:n]
+        feats = morph_feats[:n]
+
+        backbone_out = self.student.backbone(crops, is_training=True)
+        patch_tokens = backbone_out["x_norm_patchtokens"]
+        _, _, attn_map, _ = self.student.structure_block(patch_tokens, feats)
+
+        side = int(round(attn_map.shape[1] ** 0.5))
+        assert side * side == attn_map.shape[1], (
+            f"structure_block attn_map has {attn_map.shape[1]} entries, not a perfect square"
+        )
+        attn_grid = attn_map.reshape(n, side, side).float().cpu().numpy()
+
+        morph_side = int(round(feats.shape[1] ** 0.5))
+        morph_cov = feats[..., 0].reshape(n, morph_side, morph_side).float().cpu().numpy()
+
+        # Quantitative correlation, not just a picture -- computed on the
+        # SAME resolution grid for both (side x side), no upsampling
+        # involved, so this is exactly what the model itself sees, not an
+        # artifact of how the panel happens to render.
+        attn_flat = attn_grid.reshape(n, -1)
+        cov_flat = morph_cov.reshape(n, -1)
+        attn_c = attn_flat - attn_flat.mean(axis=1, keepdims=True)
+        cov_c = cov_flat - cov_flat.mean(axis=1, keepdims=True)
+        denom = np.sqrt((attn_c ** 2).sum(axis=1)) * np.sqrt((cov_c ** 2).sum(axis=1)) + 1e-8
+        attn_mask_corr = (attn_c * cov_c).sum(axis=1) / denom  # (n,) in [-1, 1]
+
+        lam = torch.exp(self.student.structure_block.log_lambda).item()
+
+        raw_masks_tensor = images.get("collated_global_nucleus_masks", None)
+        if raw_masks_tensor is not None:
+            raw_mask = raw_masks_tensor[:n].float().cpu().numpy()  # (n, H, W)
+        else:
+            raw_mask = None
+
+        mean = _VIS_IMAGENET_MEAN.to(crops.device)
+        std = _VIS_IMAGENET_STD.to(crops.device)
+        denorm = (crops * std + mean).clamp(0, 1)
+        crops_np = (denorm.permute(0, 2, 3, 1).float().cpu().numpy() * 255).astype(np.uint8)
+
+        return crops_np, raw_mask, morph_cov, attn_grid, attn_mask_corr, lam
+
+    @torch.no_grad()
+    def get_backbone_attention_visualization(self, images, n_samples=4, block_index=-1):
+        """Visualization-only, no-grad. Captures the backbone's OWN CLS
+        token attention over patches -- the plain ViT attention, unrelated
+        to structure_block -- from block `block_index` (default: -1, the
+        last block).
+
+        The backbone's attention layers are MemEffAttention (xFormers'
+        fused memory_efficient_attention kernel), which never materializes
+        a dense (B, heads, N, N) attention tensor -- that's the entire
+        point of the fused kernel, it skips building it. To capture real
+        attention weights, this temporarily flips the module-level
+        XFORMERS_AVAILABLE flag off for the duration of ONE extra forward
+        pass, which makes every MemEffAttention instance fall back to
+        plain Attention.forward (which supports the return_attention /
+        last_attn hook). The flag is restored immediately after in a
+        finally block -- this has zero effect on the real training
+        forward passes, only this separate diagnostic call.
+
+        Returns None if the backbone exposes no Attention/MemEffAttention
+        instances (shouldn't happen, but guards against an unexpected
+        architecture) or if block_index is out of range. Otherwise
+        returns cls_attn_grid: (n, side, side) float32 -- the CLS token's
+        attention over patches at the requested block, averaged over
+        heads.
+        """
+        from dinov2.layers.attention import Attention
+        import dinov2.layers.attention as attention_module
+
+        global_crops = images["collated_global_crops"].cuda(non_blocking=True)
+        n = min(n_samples, global_crops.shape[0])
+        crops = global_crops[:n]
+
+        attn_modules = [m for m in self.student.backbone.modules() if isinstance(m, Attention)]
+        if not attn_modules:
+            logger.warning("no Attention/MemEffAttention modules found in backbone -- skipping")
+            return None
+        try:
+            target_module = attn_modules[block_index]
+        except IndexError:
+            logger.warning(f"block_index {block_index} out of range for {len(attn_modules)} attention layers")
+            return None
+
+        original_flag = attention_module.XFORMERS_AVAILABLE
+        attention_module.XFORMERS_AVAILABLE = False
+        for m in attn_modules:
+            m.return_attention = True
+            m.last_attn = None
+        try:
+            backbone_out = self.student.backbone(crops, is_training=True)
+        finally:
+            attention_module.XFORMERS_AVAILABLE = original_flag
+            for m in attn_modules:
+                m.return_attention = False
+
+        attn = target_module.last_attn  # (B, heads, total_tokens, total_tokens)
+        for m in attn_modules:
+            m.last_attn = None  # free memory promptly, these are full dense tensors
+        if attn is None:
+            logger.warning("last_attn was not populated -- backbone forward may not have gone through this module")
+            return None
+
+        # Token layout is [CLS, register tokens (if any), patch tokens...],
+        # but how many register tokens actually exist in THIS backbone
+        # instance is not reliably knowable from config: cfg.train and
+        # cfg.student both have a num_register_tokens field (different
+        # values in practice), and the get_downloaded_dino_vit_interpolated
+        # loader used for dinov2_vits14/etc. doesn't implement register
+        # tokens at all regardless of what either config value says. Rather
+        # than guess which config key is right, derive the CLS+register
+        # prefix length directly from the SAME forward pass's own patch
+        # token count -- x_norm_patchtokens is exactly the patch count
+        # used everywhere else in this codebase (structure_block, etc.),
+        # so whatever's left over in attn's last dim after that must be
+        # the prefix (CLS + any registers), whatever that count actually is.
+        n_patches = backbone_out["x_norm_patchtokens"].shape[1]
+        prefix_len = attn.shape[-1] - n_patches
+        assert prefix_len >= 1, (
+            f"attn has {attn.shape[-1]} tokens total but x_norm_patchtokens reports "
+            f"{n_patches} patches -- prefix_len={prefix_len} is impossible (must be >=1 for CLS alone)"
+        )
+        cls_attn = attn[:, :, 0, prefix_len:].mean(1)  # mean over heads -> (B, N_patches)
+
+        side = int(round(cls_attn.shape[1] ** 0.5))
+        assert side * side == cls_attn.shape[1], (
+            f"CLS attention has {cls_attn.shape[1]} patch entries (attn total={attn.shape[-1]}, "
+            f"prefix_len={prefix_len}, n_patches={n_patches}), not a perfect square"
+        )
+        return cls_attn.reshape(n, side, side).float().cpu().numpy()
 
     def update_teacher(self, m):
         student_param_list = []

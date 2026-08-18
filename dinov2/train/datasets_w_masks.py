@@ -53,7 +53,10 @@ class _ImagesMasksFolderMixin:
                 img = self.transform(img)
             return img, ()
         if self.transform is not None:
-            return self.transform(img, mask)  # MorphAwareDataAugmentationDINO.__call__(image, mask)
+            # must stay a (transform_output, target) tuple -- collate_data_and_cast
+            # indexes samples_list[i][0]["global_crops"], so returning the dict
+            # alone here (dropping the () target) breaks collation with KeyError: 0
+            return self.transform(img, mask), ()
         return img, mask
 
 
@@ -64,12 +67,19 @@ class _ImagesMasksFolderMixin:
 class CONICCellDataset(_ImagesMasksFolderMixin, Dataset):
     """
     Loads images directly from the specified CONIC class folders, with
-    optional matching nucleus masks from the sibling Masks/ folder, e.g.
-    .../CONIC/train/Connective/Images/foo.png ->
-    .../CONIC/train/Connective/Masks/foo.png
+    optional matching nucleus masks from the sibling Masks/ folder. Mask
+    filenames are NOT identical to the image filename -- CONIC appends
+    "_mask" before the extension, e.g.
+    .../CONIC/train/Connective/Images/train_00000_0000144_Connective.png ->
+    .../CONIC/train/Connective/Masks/train_00000_0000144_Connective_mask.png
     """
 
     IMG_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
+
+    def _mask_path_for(self, img_path: Path) -> Path:
+        # override _ImagesMasksFolderMixin's same-filename assumption:
+        # CONIC masks are named <image_stem>_mask<suffix>
+        return img_path.parent.parent / "Masks" / f"{img_path.stem}_mask{img_path.suffix}"
 
     def __init__(self, transform=None, return_masks=False):
         self.transform = transform
@@ -228,7 +238,7 @@ class ImmunoctoHEDataset(Dataset):
             mask = Image.fromarray(mask_arr)
 
         if self.transform is not None:
-            return self.transform(img, mask)
+            return self.transform(img, mask), ()
         return img, mask
 
 
@@ -347,5 +357,5 @@ class PanNukeRawFoldDataset(Dataset):
 
         pil_mask = Image.fromarray((mask_crop * 255).astype(np.uint8))
         if self.transform is not None:
-            return self.transform(pil_img, pil_mask)  # MorphAwareDataAugmentationDINO.__call__(image, mask)
+            return self.transform(pil_img, pil_mask), ()  # MorphAwareDataAugmentationDINO.__call__(image, mask)
         return pil_img, pil_mask

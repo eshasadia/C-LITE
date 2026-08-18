@@ -352,11 +352,6 @@ class HESTCellDataset(Dataset):
         unique_id = f"{self.sample_id}_{self.barcodes[idx]}"
 
         return image, expr_vec, unique_id
-from PIL import Image
-from torch.utils.data import Dataset
-from pathlib import Path
-from PIL import Image
-from torch.utils.data import Dataset
 
 
 class MIDOGDataset(Dataset):

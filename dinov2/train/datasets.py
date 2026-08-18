@@ -47,11 +47,11 @@ class PreExtractedCellDataset(Dataset):
         for class_folder in sorted(self.root.iterdir()):
             if not class_folder.is_dir():
                 continue
-            
+
             images_dir = class_folder / "Images"
             if not images_dir.exists():
                 continue
-            
+
             for img_path in sorted(images_dir.iterdir()):
                 if img_path.suffix.lower() in self.IMG_EXTENSIONS:
                     self.samples.append(img_path)
@@ -103,7 +103,6 @@ class MIDOGCellDataset(Dataset):
         self.groups = self.df['slide'].tolist()
 
         # Stats
-        from collections import Counter
         self.class_counts = Counter(self.df['final_label'])
 
         if len(self.samples) == 0:
@@ -124,51 +123,63 @@ class MIDOGCellDataset(Dataset):
 
         return img, ()  # IMPORTANT for DINO
 
-class TCGACellCropDataset1(Dataset):
+
+# ---------------------------------------------------------------------------
+# TCGA cell-crop datasets
+#
+# The original module defined near-identical classes (TCGACellCropDataset,
+# TCGACellCropDataset1, Balanced_TCGACellCropDataset, ...1, ...2) that only
+# differed in which ZARR_ROOT / METADATA_CSV they pointed at. That logic is
+# now centralized in two base classes below; the original names are kept as
+# thin subclasses (just setting the paths) so existing imports/usages don't
+# need to change.
+# ---------------------------------------------------------------------------
+
+_TCGA_CLASS_NAMES = {
+    0: "noLabel",
+    1: "Neoplastic",
+    2: "Inflammatory",
+    3: "ConnectiveSoftTissue",
+    4: "Necroses",
+    5: "nonNeoplastic",
+}
+_TCGA_PATCH_SIZE = 64
+
+
+class TCGACellCropDatasetBase(Dataset):
     """
-    Loads 64×64 cell-centric crops from Zarr stores produced by
+    Loads 64x64 cell-centric crops from Zarr stores produced by
     the Stage 2 extraction pipeline.
 
     Each Zarr store lives at:
         <zarr_root>/<slide_id>.zarr/
-            images  → (N, 64, 64, 3)  uint8
-            types   → (N,)            int64
+            images  -> (N, 64, 64, 3)  uint8
+            types   -> (N,)            int64
+
+    Subclasses just set ZARR_ROOT as a default; it can also be passed
+    explicitly to __init__.
 
     Args:
         zarr_root:  path to the directory containing all .zarr stores
+                    (falls back to the subclass's ZARR_ROOT)
         slides:     optional list of slide_id strings to include;
                     if None, all .zarr dirs under zarr_root are used
         transform:  optional torchvision transform applied to PIL patches
     """
 
-    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr1"
-    PATCH_SIZE = 64
-
-    CLASS_NAMES = {
-        0: "noLabel",
-        1: "Neoplastic",
-        2: "Inflammatory",
-        3: "ConnectiveSoftTissue",
-        4: "Necroses",
-        5: "nonNeoplastic",
-    }
+    ZARR_ROOT = None
+    PATCH_SIZE = _TCGA_PATCH_SIZE
+    CLASS_NAMES = _TCGA_CLASS_NAMES
 
     def __init__(self, zarr_root=None, slides=None, transform=None):
         self.zarr_root = Path(zarr_root or self.ZARR_ROOT)
         self.transform = transform
         self.patch_size = self.PATCH_SIZE
 
-        # Discover Zarr stores
-        if slides is not None:
-            zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
-            zarr_paths = [p for p in zarr_paths if p.exists()]
-        else:
-            zarr_paths = sorted(self.zarr_root.glob("*.zarr"))
-
+        zarr_paths = self._discover_zarr_paths(slides)
         if len(zarr_paths) == 0:
             raise RuntimeError(f"No .zarr stores found under {self.zarr_root}")
 
-        # Open all stores and build a flat index: (store_idx, cell_idx)
         self.stores = []
         self.samples = []
 
@@ -180,13 +191,18 @@ class TCGACellCropDataset1(Dataset):
             self.stores.append({"images": img_ds, "types": type_ds, "name": zp.stem})
 
             n = img_ds.shape[0]
-            for i in range(n):
-                self.samples.append((store_idx, i))
+            self.samples.extend((store_idx, i) for i in range(n))
 
         print(
-            f"[TCGACellCropDataset] {len(zarr_paths)} slides, "
+            f"[{type(self).__name__}] {len(zarr_paths)} slides, "
             f"{len(self.samples)} cells total"
         )
+
+    def _discover_zarr_paths(self, slides):
+        if slides is not None:
+            zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
+            return [p for p in zarr_paths if p.exists()]
+        return sorted(self.zarr_root.glob("*.zarr"))
 
     def __len__(self):
         return len(self.samples)
@@ -195,7 +211,7 @@ class TCGACellCropDataset1(Dataset):
         store_idx, cell_idx = self.samples[idx]
         store = self.stores[store_idx]
 
-        patch = np.array(store["images"][cell_idx])       # (64, 64, 3) uint8
+        patch = np.array(store["images"][cell_idx])  # (64, 64, 3) uint8
         patch = Image.fromarray(patch)
 
         if self.transform is not None:
@@ -204,57 +220,47 @@ class TCGACellCropDataset1(Dataset):
         return patch, ()  # DINO ignores labels
 
 
-class Balanced_TCGACellCropDataset1(Dataset):
-    """
-    Balanced TCGA Zarr dataset with internal metadata CSV.
+class TCGACellCropDataset1(TCGACellCropDatasetBase):
+    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr1"
 
-    Ensures equal sampling across cancer types (e.g., LUAD, GBMLGG).
-    """
 
-    # -------------------------
-    # Paths / config
-    # -------------------------
+class TCGACellCropDataset(TCGACellCropDatasetBase):
     ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr2"
 
-    METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_new_5slides_per_type.csv"
+class TCGACellCropDataset2(TCGACellCropDatasetBase):
+    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr3"
+class BalancedTCGACellCropDatasetBase(Dataset):
+    """
+    Balanced TCGA Zarr dataset with an internal metadata CSV mapping
+    slide -> cancer type. Ensures equal sampling across cancer types
+    (e.g. LUAD, GBMLGG) by capping every type to the smallest type's
+    cell count (or to max_per_type, whichever is smaller).
 
-    PATCH_SIZE = 64
+    Subclasses just set ZARR_ROOT / METADATA_CSV as defaults; both can
+    also be passed explicitly to __init__.
+    """
 
-    CLASS_NAMES = {
-        0: "noLabel",
-        1: "Neoplastic",
-        2: "Inflammatory",
-        3: "ConnectiveSoftTissue",
-        4: "Necroses",
-        5: "nonNeoplastic",
-    }
+    ZARR_ROOT = None
+    METADATA_CSV = None
+    PATCH_SIZE = _TCGA_PATCH_SIZE
+    CLASS_NAMES = _TCGA_CLASS_NAMES
 
     def __init__(
         self,
         zarr_root=None,
+        metadata_csv=None,
         slides=None,
         transform=None,
         max_per_type=None,
-        seed=42
+        seed=42,
     ):
         self.zarr_root = Path(zarr_root or self.ZARR_ROOT)
         self.transform = transform
         self.max_per_type = max_per_type
         self.seed = seed
-
         random.seed(seed)
-
-        # -------------------------
-        # Load metadata CSV (inside class)
-        # -------------------------
-        meta = pd.read_csv(self.METADATA_CSV)
-
-        # slide -> cancer type mapping
+        meta = pd.read_csv(metadata_csv or self.METADATA_CSV)
         slide_to_type = dict(zip(meta["slide"], meta["type"]))
-
-        # -------------------------
-        # Load Zarr stores
-        # -------------------------
         if slides is not None:
             zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
             zarr_paths = [p for p in zarr_paths if p.exists()]
@@ -265,13 +271,8 @@ class Balanced_TCGACellCropDataset1(Dataset):
             raise RuntimeError(f"No .zarr stores found under {self.zarr_root}")
 
         self.stores = []
+        type_to_samples = defaultdict(list)  # type -> list of (store_idx, cell_idx)
 
-        # type -> list of (store_idx, cell_idx)
-        type_to_samples = defaultdict(list)
-
-        # -------------------------
-        # Build index
-        # -------------------------
         for zp in zarr_paths:
             slide_id = zp.stem
             cancer_type = slide_to_type.get(slide_id, None)
@@ -289,29 +290,21 @@ class Balanced_TCGACellCropDataset1(Dataset):
                 "images": img_ds,
                 "types": type_ds,
                 "slide": slide_id,
-                "type": cancer_type
+                "type": cancer_type,
             })
 
             n = img_ds.shape[0]
-
-            for i in range(n):
-                type_to_samples[cancer_type].append((store_idx, i))
+            type_to_samples[cancer_type].extend((store_idx, i) for i in range(n))
 
         if len(type_to_samples) == 0:
             raise RuntimeError("No valid samples found after CSV filtering")
-
-        # -------------------------
-        # BALANCING STEP
-        # -------------------------
         all_types = list(type_to_samples.keys())
-
         min_count = min(len(v) for v in type_to_samples.values())
 
         if self.max_per_type is not None:
             min_count = min(min_count, self.max_per_type)
 
         self.samples = []
-
         for t in all_types:
             samples_t = type_to_samples[t]
             random.shuffle(samples_t)
@@ -320,7 +313,7 @@ class Balanced_TCGACellCropDataset1(Dataset):
         random.shuffle(self.samples)
 
         print(
-            f"[Balanced Dataset] "
+            f"[{type(self).__name__}] "
             f"Types: {len(all_types)} | "
             f"Samples/type: {min_count} | "
             f"Total samples: {len(self.samples)}"
@@ -342,359 +335,23 @@ class Balanced_TCGACellCropDataset1(Dataset):
         return patch, ()
 
 
-class Balanced_TCGACellCropDataset(Dataset):
-    """
-    Balanced TCGA Zarr dataset with internal metadata CSV.
-
-    Ensures equal sampling across cancer types (e.g., LUAD, GBMLGG).
-    """
-
-    # -------------------------
-    # Paths / config
-    # -------------------------
+class Balanced_TCGACellCropDataset(BalancedTCGACellCropDatasetBase):
     ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr1"
-
     METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_slides.csv"
 
-    PATCH_SIZE = 64
 
-    CLASS_NAMES = {
-        0: "noLabel",
-        1: "Neoplastic",
-        2: "Inflammatory",
-        3: "ConnectiveSoftTissue",
-        4: "Necroses",
-        5: "nonNeoplastic",
-    }
-
-    def __init__(
-        self,
-        zarr_root=None,
-        slides=None,
-        transform=None,
-        max_per_type=None,
-        seed=42
-    ):
-        self.zarr_root = Path(zarr_root or self.ZARR_ROOT)
-        self.transform = transform
-        self.max_per_type = max_per_type
-        self.seed = seed
-
-        random.seed(seed)
-
-        # -------------------------
-        # Load metadata CSV (inside class)
-        # -------------------------
-        meta = pd.read_csv(self.METADATA_CSV)
-
-        # slide -> cancer type mapping
-        slide_to_type = dict(zip(meta["slide"], meta["type"]))
-
-        # -------------------------
-        # Load Zarr stores
-        # -------------------------
-        if slides is not None:
-            zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
-            zarr_paths = [p for p in zarr_paths if p.exists()]
-        else:
-            zarr_paths = sorted(self.zarr_root.glob("*.zarr"))
-
-        if len(zarr_paths) == 0:
-            raise RuntimeError(f"No .zarr stores found under {self.zarr_root}")
-
-        self.stores = []
-
-        # type -> list of (store_idx, cell_idx)
-        type_to_samples = defaultdict(list)
-
-        # -------------------------
-        # Build index
-        # -------------------------
-        for zp in zarr_paths:
-            slide_id = zp.stem
-            cancer_type = slide_to_type.get(slide_id, None)
-
-            # skip slides not in CSV
-            if cancer_type is None:
-                continue
-
-            root = zarr.open(str(zp), mode="r")
-            img_ds = root["images"]
-            type_ds = root["types"]
-
-            store_idx = len(self.stores)
-            self.stores.append({
-                "images": img_ds,
-                "types": type_ds,
-                "slide": slide_id,
-                "type": cancer_type
-            })
-
-            n = img_ds.shape[0]
-
-            for i in range(n):
-                type_to_samples[cancer_type].append((store_idx, i))
-
-        if len(type_to_samples) == 0:
-            raise RuntimeError("No valid samples found after CSV filtering")
-
-        # -------------------------
-        # BALANCING STEP
-        # -------------------------
-        all_types = list(type_to_samples.keys())
-
-        min_count = min(len(v) for v in type_to_samples.values())
-
-        if self.max_per_type is not None:
-            min_count = min(min_count, self.max_per_type)
-
-        self.samples = []
-
-        for t in all_types:
-            samples_t = type_to_samples[t]
-            random.shuffle(samples_t)
-            self.samples.extend(samples_t[:min_count])
-
-        random.shuffle(self.samples)
-
-        print(
-            f"[Balanced Dataset] "
-            f"Types: {len(all_types)} | "
-            f"Samples/type: {min_count} | "
-            f"Total samples: {len(self.samples)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        store_idx, cell_idx = self.samples[idx]
-        store = self.stores[store_idx]
-
-        patch = np.array(store["images"][cell_idx])  # (64,64,3)
-        patch = Image.fromarray(patch)
-
-        if self.transform is not None:
-            patch = self.transform(patch)
-
-        return patch, ()
-
-class Balanced_TCGACellCropDataset2(Dataset):
-    """
-    Balanced TCGA Zarr dataset with internal metadata CSV.
-
-    Ensures equal sampling across cancer types (e.g., LUAD, GBMLGG).
-    """
-
-    # -------------------------
-    # Paths / config
-    # -------------------------
-    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr3"
-
-    METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_new_5slides_per_type1.csv"
-
-    PATCH_SIZE = 64
-
-    CLASS_NAMES = {
-        0: "noLabel",
-        1: "Neoplastic",
-        2: "Inflammatory",
-        3: "ConnectiveSoftTissue",
-        4: "Necroses",
-        5: "nonNeoplastic",
-    }
-
-    def __init__(
-        self,
-        zarr_root=None,
-        slides=None,
-        transform=None,
-        max_per_type=None,
-        seed=42
-    ):
-        self.zarr_root = Path(zarr_root or self.ZARR_ROOT)
-        self.transform = transform
-        self.max_per_type = max_per_type
-        self.seed = seed
-
-        random.seed(seed)
-
-        # -------------------------
-        # Load metadata CSV (inside class)
-        # -------------------------
-        meta = pd.read_csv(self.METADATA_CSV)
-
-        # slide -> cancer type mapping
-        slide_to_type = dict(zip(meta["slide"], meta["type"]))
-
-        # -------------------------
-        # Load Zarr stores
-        # -------------------------
-        if slides is not None:
-            zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
-            zarr_paths = [p for p in zarr_paths if p.exists()]
-        else:
-            zarr_paths = sorted(self.zarr_root.glob("*.zarr"))
-
-        if len(zarr_paths) == 0:
-            raise RuntimeError(f"No .zarr stores found under {self.zarr_root}")
-
-        self.stores = []
-
-        # type -> list of (store_idx, cell_idx)
-        type_to_samples = defaultdict(list)
-
-        # -------------------------
-        # Build index
-        # -------------------------
-        for zp in zarr_paths:
-            slide_id = zp.stem
-            cancer_type = slide_to_type.get(slide_id, None)
-
-            # skip slides not in CSV
-            if cancer_type is None:
-                continue
-
-            root = zarr.open(str(zp), mode="r")
-            img_ds = root["images"]
-            type_ds = root["types"]
-
-            store_idx = len(self.stores)
-            self.stores.append({
-                "images": img_ds,
-                "types": type_ds,
-                "slide": slide_id,
-                "type": cancer_type
-            })
-
-            n = img_ds.shape[0]
-
-            for i in range(n):
-                type_to_samples[cancer_type].append((store_idx, i))
-
-        if len(type_to_samples) == 0:
-            raise RuntimeError("No valid samples found after CSV filtering")
-
-        # -------------------------
-        # BALANCING STEP
-        # -------------------------
-        all_types = list(type_to_samples.keys())
-
-        min_count = min(len(v) for v in type_to_samples.values())
-
-        if self.max_per_type is not None:
-            min_count = min(min_count, self.max_per_type)
-
-        self.samples = []
-
-        for t in all_types:
-            samples_t = type_to_samples[t]
-            random.shuffle(samples_t)
-            self.samples.extend(samples_t[:min_count])
-
-        random.shuffle(self.samples)
-
-        print(
-            f"[Balanced Dataset] "
-            f"Types: {len(all_types)} | "
-            f"Samples/type: {min_count} | "
-            f"Total samples: {len(self.samples)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        store_idx, cell_idx = self.samples[idx]
-        store = self.stores[store_idx]
-
-        patch = np.array(store["images"][cell_idx])  # (64,64,3)
-        patch = Image.fromarray(patch)
-
-        if self.transform is not None:
-            patch = self.transform(patch)
-
-        return patch, ()
-
-class TCGACellCropDataset(Dataset):
-    """
-    Loads 64×64 cell-centric crops from Zarr stores produced by
-    the Stage 2 extraction pipeline.
-
-    Each Zarr store lives at:
-        <zarr_root>/<slide_id>.zarr/
-            images  → (N, 64, 64, 3)  uint8
-            types   → (N,)            int64
-
-    Args:
-        zarr_root:  path to the directory containing all .zarr stores
-        slides:     optional list of slide_id strings to include;
-                    if None, all .zarr dirs under zarr_root are used
-        transform:  optional torchvision transform applied to PIL patches
-    """
-
+class Balanced_TCGACellCropDataset1(BalancedTCGACellCropDatasetBase):
     ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr2"
-    PATCH_SIZE = 64
+    METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_new_5slides_per_type.csv"
 
-    CLASS_NAMES = {
-        0: "noLabel",
-        1: "Neoplastic",
-        2: "Inflammatory",
-        3: "ConnectiveSoftTissue",
-        4: "Necroses",
-        5: "nonNeoplastic",
-    }
 
-    def __init__(self, zarr_root=None, slides=None, transform=None):
-        self.zarr_root = Path(zarr_root or self.ZARR_ROOT)
-        self.transform = transform
-        self.patch_size = self.PATCH_SIZE
-
-        # Discover Zarr stores
-        if slides is not None:
-            zarr_paths = [self.zarr_root / f"{s}.zarr" for s in slides]
-            zarr_paths = [p for p in zarr_paths if p.exists()]
-        else:
-            zarr_paths = sorted(self.zarr_root.glob("*.zarr"))
-
-        if len(zarr_paths) == 0:
-            raise RuntimeError(f"No .zarr stores found under {self.zarr_root}")
-
-        # Open all stores and build a flat index: (store_idx, cell_idx)
-        self.stores = []
-        self.samples = []
-
-        for zp in zarr_paths:
-            root = zarr.open(str(zp), mode="r")
-            img_ds = root["images"]
-            type_ds = root["types"]
-            store_idx = len(self.stores)
-            self.stores.append({"images": img_ds, "types": type_ds, "name": zp.stem})
-
-            n = img_ds.shape[0]
-            for i in range(n):
-                self.samples.append((store_idx, i))
-
-        print(
-            f"[TCGACellCropDataset] {len(zarr_paths)} slides, "
-            f"{len(self.samples)} cells total"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        store_idx, cell_idx = self.samples[idx]
-        store = self.stores[store_idx]
-
-        patch = np.array(store["images"][cell_idx])       # (64, 64, 3) uint8
-        patch = Image.fromarray(patch)
-
-        if self.transform is not None:
-            patch = self.transform(patch)
-
-        return patch, ()  # DINO ignores labels
-
+class Balanced_TCGACellCropDataset2(BalancedTCGACellCropDatasetBase):
+    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr3"
+    METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_new_5slides_per_type1.csv"
+    
+class Balanced_TCGACellCropDataset3(BalancedTCGACellCropDatasetBase):
+    ZARR_ROOT = "/tia/lab-share/esha/TCGA_data/tcga-zarr4"
+    METADATA_CSV = "/tia/phd-data/u5552013/TCGA_data/TCGA_new_5slides_per_type2.csv"
 
 class PathoCellbenchDataset(Dataset):
     """
@@ -750,8 +407,6 @@ class PathoCellbenchDataset(Dataset):
 
                 for inst_id in inst_ids:
                     cell_mask = (inst_mask == inst_id)
-                    # if cell_mask.sum() < 10:
-                    #     continue
 
                     sem_vals = sem_mask[cell_mask]
                     sem_vals = sem_vals[sem_vals > 0]
@@ -820,6 +475,7 @@ class PathoCellbenchDataset(Dataset):
 
         return patch, ()  # DINO ignores labels
 
+
 class ImmunoctoHEDataset(Dataset):
     """
     Loads HE images from:
@@ -854,6 +510,7 @@ class ImmunoctoHEDataset(Dataset):
             img = self.transform(img)
         return img, ()  # target must be empty tuple for DINO
 
+
 class CONICCellDataset(Dataset):
     """
     Loads images directly from the specified CONIC class folders.
@@ -862,23 +519,17 @@ class CONICCellDataset(Dataset):
 
     IMG_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
 
+    _CLASSES = ("Connective", "Eosinophil", "Epithelial", "Lymphocyte", "Neutrophil", "Plasma")
+    _BASE = "/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC"
+
     def __init__(self, transform=None):
         self.transform = transform
         self.samples = []
 
         image_dirs = [
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Connective/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Eosinophil/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Epithelial/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Lymphocyte/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Neutrophil/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/train/Plasma/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Connective/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Eosinophil/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Epithelial/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Lymphocyte/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Neutrophil/Images"),
-            Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/CONIC/test/Plasma/Images"),
+            Path(self._BASE) / split / cls / "Images"
+            for split in ("train", "test")
+            for cls in self._CLASSES
         ]
 
         for img_dir in image_dirs:
@@ -902,6 +553,7 @@ class CONICCellDataset(Dataset):
             img = self.transform(img)
         return img, ()
 
+
 class PanNukeCellDataset(Dataset):
     """
     Loads PanNuke cell patch images from hardcoded folders.
@@ -911,6 +563,9 @@ class PanNukeCellDataset(Dataset):
     """
 
     IMG_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
+
+    _BASE = "/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke"
+    _FOLDS = ("Fold1", "Fold2", "Fold3")
 
     def __init__(self, transform=None):
         self.transform = transform
@@ -928,34 +583,14 @@ class PanNukeCellDataset(Dataset):
 
         self.class_to_idx = {cls: i for i, cls in enumerate(self.class_names)}
 
-        # hardcoded counts dictionary
         self.fold_class_counts = {
-            "Fold1": {cls: 0 for cls in self.class_names},
-            "Fold2": {cls: 0 for cls in self.class_names},
-            "Fold3": {cls: 0 for cls in self.class_names},
+            fold: {cls: 0 for cls in self.class_names} for fold in self._FOLDS
         }
 
         image_dirs = [
-            # ===== Fold1 =====
-            ("Fold1", "Connective",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Connective")),
-            ("Fold1", "Dead",         Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Dead")),
-            ("Fold1", "Epithelial",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Epithelial")),
-            ("Fold1", "Inflammatory", Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Inflammatory")),
-            ("Fold1", "Neoplastic",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Neoplastic")),
-
-            # ===== Fold2 =====
-            ("Fold2", "Connective",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold2_cell_patches/Connective")),
-            ("Fold2", "Dead",         Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold2_cell_patches/Dead")),
-            ("Fold2", "Epithelial",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold2_cell_patches/Epithelial")),
-            ("Fold2", "Inflammatory", Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold2_cell_patches/Inflammatory")),
-            ("Fold2", "Neoplastic",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold2_cell_patches/Neoplastic")),
-
-            # ===== Fold3 =====
-            ("Fold3", "Connective",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold3_cell_patches/Connective")),
-            ("Fold3", "Dead",         Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold3_cell_patches/Dead")),
-            ("Fold3", "Epithelial",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold3_cell_patches/Epithelial")),
-            ("Fold3", "Inflammatory", Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold3_cell_patches/Inflammatory")),
-            ("Fold3", "Neoplastic",   Path("/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold3_cell_patches/Neoplastic")),
+            (fold, cls, Path(self._BASE) / f"{fold}_cell_patches" / cls)
+            for fold in self._FOLDS
+            for cls in self.class_names
         ]
 
         for fold, cls_name, img_dir in image_dirs:
@@ -977,7 +612,7 @@ class PanNukeCellDataset(Dataset):
         print("\n[PanNukeCellDataset] Dataset summary:")
         grand_total = 0
 
-        for fold in ["Fold1", "Fold2", "Fold3"]:
+        for fold in self._FOLDS:
             print(f"\n  {fold}:")
             fold_total = 0
             for cls_name in self.class_names:

@@ -69,17 +69,96 @@ def interpolate_pos_encoding(x, w, h):
 
     # Concatenate the class token with the interpolated position embeddings
     return torch.cat((x[:, :1], patch_pos_embed), dim=1)
+def _bilinear_resize_matrix(src_size, dst_size, device, dtype, mode="bicubic", antialias=True):
+    """Builds the linear operator B such that resizing a flattened src_size x
+    src_size 'image' equals B @ flat_image. antialias=True matters here
+    because this is almost always *downsampling* (e.g. 14 -> 8); without
+    it, F.interpolate point-samples instead of properly box-filtering,
+    which makes B (and thus PI-resize's pinv of B) noisy and unstable.
+    Despite the function name (kept for backward compatibility with
+    callers), the default mode is bicubic, not bilinear -- bicubic with
+    antialiasing is what actually gets used unless overridden."""
+    src = torch.eye(src_size * src_size, device=device, dtype=dtype).reshape(
+        src_size * src_size, 1, src_size, src_size)
+    resized = nn.functional.interpolate(src, size=(dst_size, dst_size), mode=mode,
+                                         align_corners=False, antialias=antialias)
+    B = resized.reshape(src_size * src_size, dst_size * dst_size).T  # (dst^2, src^2)
+    return B
 
 
-def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
+def pi_resize_patch_kernel(kernel, target_size):
+    """FlexiViT-style PI-resize: reshapes a square conv kernel to
+    target_size x target_size while preserving its function under resizing
+    (not just its shape, unlike plain bicubic interpolation of the weights).
+    Implicitly assumes patches are drawn from an isotropic (white-noise,
+    Sigma=I) distribution -- if you have real patch statistics available,
+    a covariance-weighted PI-resize gives a more accurate transplant, but
+    this unweighted version is what's wired into the backbone loader below."""
+    out_ch, in_ch, kh, kw = kernel.shape
+    assert kh == kw, "PI-resize as implemented here assumes a square kernel"
+    if kh == target_size:
+        return kernel
+    B = _bilinear_resize_matrix(kh, target_size, kernel.device, kernel.dtype)  # (target^2, kh^2)
+    # rcond=1e-4 regularizes the pseudo-inverse against ill-conditioning --
+    # without it, near-zero singular values in B (more likely without
+    # antialiasing, but possible regardless) can blow up small numerical
+    # noise into large, spurious values in the resized kernel.
+    P = torch.linalg.pinv(B.T, rcond=1e-4)  # (target^2, kh^2), the PI-resize transform matrix
+    flat = kernel.reshape(out_ch * in_ch, kh * kh)  # (out*in, kh^2)
+    resized_flat = flat @ P.T  # (out*in, target^2)
+    return resized_flat.reshape(out_ch, in_ch, target_size, target_size)
 
-    model = torch.hub.load("facebookresearch/dinov2", modelname)  #
+# def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
 
-    input_tensor = model.pos_embed
-    tensor_corr_shape = interpolate_pos_encoding(input_tensor, 16, 16)
-    pos_embed = nn.Parameter(torch.zeros(1, 257))
+#     model = torch.hub.load("facebookresearch/dinov2", modelname)  #
+
+#     input_tensor = model.pos_embed
+#     tensor_corr_shape = interpolate_pos_encoding(input_tensor, 16, 16)
+#     pos_embed = nn.Parameter(torch.zeros(1, 257))
+#     pos_embed.data = tensor_corr_shape
+#     model.pos_embed = pos_embed
+#     return model
+def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14", patch_size=14, img_size=224):
+    """Downloads the pretrained checkpoint, then adapts it to a different
+    patch_size / crop resolution:
+      - PI-resizes patch_embed.proj's conv kernel (e.g. 14x14 -> 8x8) --
+        required whenever cfg.student.patch_size differs from the
+        checkpoint's native patch size, or the token grid this backbone
+        actually produces silently won't match what the rest of the config
+        (MaskingGenerator, structure block, morph_feat grid, etc.) expects.
+      - Interpolates pos_embed to the resulting (img_size // patch_size)
+        token grid, instead of the previous hardcoded 16x16 target.
+    """
+    model = torch.hub.load("facebookresearch/dinov2", modelname)
+
+    old_conv = model.patch_embed.proj
+    old_patch_size = old_conv.kernel_size[0]
+    if patch_size != old_patch_size:
+        logger.info(f"OPTIONS -- PI-resizing patch_embed kernel {old_patch_size}x{old_patch_size} "
+                    f"-> {patch_size}x{patch_size}")
+        new_weight = pi_resize_patch_kernel(old_conv.weight.data, patch_size)
+        new_conv = nn.Conv2d(
+            old_conv.in_channels, old_conv.out_channels,
+            kernel_size=patch_size, stride=patch_size,
+            bias=old_conv.bias is not None,
+        )
+        new_conv.weight.data = new_weight
+        if old_conv.bias is not None:
+            new_conv.bias.data = old_conv.bias.data.clone()
+        model.patch_embed.proj = new_conv
+        if hasattr(model.patch_embed, "patch_size"):
+            model.patch_embed.patch_size = (patch_size, patch_size)
+        if hasattr(model.patch_embed, "img_size"):
+            model.patch_embed.img_size = (img_size, img_size)
+        if hasattr(model, "patch_size"):
+            model.patch_size = patch_size
+
+    grid_side = img_size // patch_size
+    tensor_corr_shape = interpolate_pos_encoding(model.pos_embed, grid_side, grid_side)
+    pos_embed = nn.Parameter(torch.zeros_like(tensor_corr_shape))
     pos_embed.data = tensor_corr_shape
     model.pos_embed = pos_embed
+    logger.info(f"OPTIONS -- pos_embed interpolated to {grid_side}x{grid_side} = {grid_side * grid_side} patches")
     return model
 def load_backbone_checkpoint(backbone: nn.Module, checkpoint_path: str):
     """
@@ -202,23 +281,29 @@ class SSLMetaArch(nn.Module):
         student_model_dict = dict()
         teacher_model_dict = dict()
 
+        # if cfg.student.arch in ["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"]:
+        #     student_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
+        #     teacher_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
+        #     embed_dict = {"dinov2_vits14": 384, "dinov2_vitb14": 768, "dinov2_vitl14": 1024, "dinov2_vitg14": 1536}
+        #     embed_dim = embed_dict[cfg.student.arch]
+        # else:
+        #     student_backbone, teacher_backbone, embed_dim = build_model_from_cfg(cfg)
         if cfg.student.arch in ["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"]:
-            student_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
-            teacher_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
+            student_backbone = get_downloaded_dino_vit_interpolated(
+                cfg.student.arch, patch_size=cfg.student.patch_size, img_size=cfg.crops.global_crops_size
+            )
+            teacher_backbone = get_downloaded_dino_vit_interpolated(
+                cfg.student.arch, patch_size=cfg.student.patch_size, img_size=cfg.crops.global_crops_size
+            )
             embed_dict = {"dinov2_vits14": 384, "dinov2_vitb14": 768, "dinov2_vitl14": 1024, "dinov2_vitg14": 1536}
             embed_dim = embed_dict[cfg.student.arch]
         else:
             student_backbone, teacher_backbone, embed_dim = build_model_from_cfg(cfg)
-
         student_model_dict["backbone"] = student_backbone
         teacher_model_dict["backbone"] = teacher_backbone
         logger.info(f"OPTIONS -- architecture : embed_dim: {embed_dim}")
 
         if cfg.student.pretrained_weights:
-            # Load into the student backbone. `prepare_for_distributed_training`
-            # (called later, before FSDP wrapping) copies student -> teacher for
-            # every submodule, so the teacher inherits these weights too -- no
-            # need to load into teacher_backbone separately here.
             load_backbone_checkpoint(student_backbone, cfg.student.pretrained_weights)
 
         self.embed_dim = embed_dim
@@ -291,8 +376,6 @@ class SSLMetaArch(nn.Module):
 
         self.student = nn.ModuleDict(student_model_dict)
         self.teacher = nn.ModuleDict(teacher_model_dict)
-
-        # there is no backpropagation through the teacher, so no need for gradients
         for p in self.teacher.parameters():
             p.requires_grad = False
         logger.info(f"Student and Teacher are built: they are both {cfg.student.arch} network.")

@@ -15,7 +15,6 @@ from torch import Tensor, nn
 
 logger = logging.getLogger("dinov2")
 
-
 XFORMERS_ENABLED = os.environ.get("XFORMERS_DISABLED") is None
 try:
     if XFORMERS_ENABLED:
@@ -45,11 +44,12 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim**-0.5
-
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
+        self.return_attention = False
+        self.last_attn = None
 
     def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
@@ -60,6 +60,9 @@ class Attention(nn.Module):
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
+
+        if self.return_attention:
+            self.last_attn = attn.detach()
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -73,6 +76,14 @@ class MemEffAttention(Attention):
             if attn_bias is not None:
                 raise AssertionError("xFormers is required for using nested tensors")
             return super().forward(x)
+
+        if self.return_attention:
+            logger.warning(
+                "return_attention=True has no effect on MemEffAttention -- xFormers' "
+                "memory_efficient_attention never materializes a dense attention tensor "
+                "to capture. Set XFORMERS_DISABLED=1 to fall back to plain Attention if "
+                "you need real attention maps out of this run."
+            )
 
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)

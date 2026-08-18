@@ -109,18 +109,12 @@ class InfiniteSampler(Sampler):
 
     def _shuffled_iterator(self):
         assert self._shuffle
-
-        # Instantiate a generator here (rather than in the ctor) to keep the class
-        # picklable (requirement of mp.spawn)
         generator = torch.Generator().manual_seed(self._seed)
 
         while True:
             iterable = _generate_randperm_indices(size=self._sample_count, generator=generator)
             yield from itertools.islice(iterable, self._start, None, self._step)
 
-
-# The following function is somewhat equivalent to _new_shuffle_tensor_slice below,
-# but avoids a full in-place random permutation generation.
 def _shuffle_tensor_slice(
     *, tensor: torch.Tensor, start: int = 0, step: int = 1, generator: torch.Generator
 ) -> np.ndarray:
@@ -207,8 +201,6 @@ class ShardedInfiniteSampler(Sampler):
     def _shuffled_iterator(self):
         assert self._shuffle
 
-        # Instantiate a generator here (rather than in the ctor) to be keep the class
-        # picklable (requirement of mp.spawn)
         generator = torch.Generator()
 
         # Always shuffle everything first

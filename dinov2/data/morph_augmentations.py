@@ -1,11 +1,37 @@
 # dinov2/data/morph_augmentations.py
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 
 from .augmentations import DataAugmentationDINO
+
+IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
+
+
+class GaussianBlur(transforms.RandomApply):
+    """Same as dinov2's own GaussianBlur helper -- duplicated here so this
+    file has no hidden dependency on augmentations.py's private helpers."""
+
+    def __init__(self, p=0.5, radius_min=0.1, radius_max=2.0):
+        keep_p = 1 - (1 - p)
+        transform = transforms.Lambda(
+            lambda img: img.filter(ImageFilter.GaussianBlur(radius=np.random.uniform(radius_min, radius_max)))
+        )
+        super().__init__(transforms=[transform], p=p)
+
+
+class MaybeSolarize:
+    def __init__(self, p=0.2, threshold=128):
+        self.p = p
+        self.threshold = threshold
+
+    def __call__(self, img):
+        if np.random.random() < self.p:
+            return ImageOps.solarize(img, threshold=self.threshold)
+        return img
 
 
 def _sample_resized_crop_params(img, scale, ratio=(3.0 / 4.0, 4.0 / 3.0)):
@@ -13,19 +39,46 @@ def _sample_resized_crop_params(img, scale, ratio=(3.0 / 4.0, 4.0 / 3.0)):
 
 
 class MorphAwareDataAugmentationDINO(DataAugmentationDINO):
-    """Same crop/flip/color-jitter recipe as DataAugmentationDINO, but replays
-    every geometric transform on the paired instance mask and returns the
-    resulting morph_feat (coverage + centroid-offset per patch) alongside
-    each crop. Color jitter is NOT applied to the mask (geometry only)."""
-
     def __init__(self, *args, patch_size=14, **kwargs):
         super().__init__(*args, **kwargs)
         self.patch_size = patch_size
 
+        color_jittering = transforms.Compose([
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)], p=0.8
+            ),
+            transforms.RandomGrayscale(p=0.2),
+        ])
+        normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+        ])
+
+        # global_transfo1: strong blur, no solarize (matches dinov2 default)
+        self.photometric_global1 = transforms.Compose([
+            color_jittering,
+            GaussianBlur(p=1.0),
+            normalize,
+        ])
+        # global_transfo2: light blur + occasional solarize
+        self.photometric_global2 = transforms.Compose([
+            color_jittering,
+            GaussianBlur(p=0.1),
+            MaybeSolarize(p=0.2),
+            normalize,
+        ])
+        # local_transfo: moderate blur
+        self.photometric_local = transforms.Compose([
+            color_jittering,
+            GaussianBlur(p=0.5),
+            normalize,
+        ])
+
     def _paired_crop(self, image, mask, size, scale, flip_p=0.5):
         i, j, h, w = _sample_resized_crop_params(image, scale=scale)
         img_c = TF.resized_crop(image, i, j, h, w, [size, size], TF.InterpolationMode.BICUBIC)
-        mask_c = TF.resized_crop(mask, i, j, h, w, [size, size], TF.InterpolationMode.NEAREST)
+        mask_c = TF.resized_crop(mask, i, j, h, w, [size, size], TF.InterpolationMode.BILINEAR)
+        mask_c = mask_c.point(lambda p: 255 if p > 127 else 0)
         if torch.rand(1).item() < flip_p:
             img_c = TF.hflip(img_c)
             mask_c = TF.hflip(mask_c)
@@ -52,17 +105,21 @@ class MorphAwareDataAugmentationDINO(DataAugmentationDINO):
 
         im1_base, m1_base = self._paired_crop(image, mask, self.global_crops_size, self.global_crops_scale)
         im2_base, m2_base = self._paired_crop(image, mask, self.global_crops_size, self.global_crops_scale)
-        output["global_crops"] = [self.global_transfo1(im1_base), self.global_transfo2(im2_base)]
+        output["global_crops"] = [self.photometric_global1(im1_base), self.photometric_global2(im2_base)]
         output["global_crops_teacher"] = output["global_crops"]
         output["global_morph_feats"] = [
             self._morph_feat_from_mask(m1_base, self.global_crops_size),
             self._morph_feat_from_mask(m2_base, self.global_crops_size),
         ]
+        output["global_masks"] = [
+            torch.from_numpy((np.array(m1_base) > 127).astype(np.float32)),
+            torch.from_numpy((np.array(m2_base) > 127).astype(np.float32)),
+        ]
 
         local_crops, local_morph_feats = [], []
         for _ in range(self.local_crops_number):
             im_c, m_c = self._paired_crop(image, mask, self.local_crops_size, self.local_crops_scale)
-            local_crops.append(self.local_transfo(im_c))
+            local_crops.append(self.photometric_local(im_c))
             local_morph_feats.append(self._morph_feat_from_mask(m_c, self.local_crops_size))
         output["local_crops"] = local_crops
         output["local_morph_feats"] = local_morph_feats
