@@ -4,6 +4,8 @@ from functools import partial
 import torch
 from dinov2.fsdp import ShardedGradScaler, get_fsdp_modules, get_fsdp_wrapper, reshard_fsdp_model
 from dinov2.layers import DINOHead
+from dinov2.layers.structure_block import StructureAttentionBlock
+from dinov2.layers.feature_sharpener import FeatureSharpener
 from dinov2.loss import DINOLoss, KoLeoLoss, iBOTPatchLoss
 from dinov2.models import build_model_from_cfg
 import timm
@@ -71,15 +73,62 @@ def interpolate_pos_encoding(x, w, h):
     return torch.cat((x[:, :1], patch_pos_embed), dim=1)
 
 
-def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
+def pi_resize_patch_kernel(kernel, target_size):
+    """FlexiViT-style PI-resize: reshapes a square conv kernel to
+    target_size x target_size while preserving its function under resizing
+    (not just its shape, unlike plain bicubic interpolation of the weights)."""
+    out_ch, in_ch, kh, kw = kernel.shape
+    assert kh == kw, "PI-resize as implemented here assumes a square kernel"
+    if kh == target_size:
+        return kernel
+    src = torch.eye(kh * kh, device=kernel.device, dtype=kernel.dtype).reshape(kh * kh, 1, kh, kh)
+    resized = nn.functional.interpolate(src, size=(target_size, target_size), mode="bilinear", align_corners=False)
+    B = resized.reshape(kh * kh, target_size * target_size).T  # (target^2, kh^2)
+    P = torch.linalg.pinv(B.T)  # (target^2, kh^2), the PI-resize transform matrix
+    flat = kernel.reshape(out_ch * in_ch, kh * kh)  # (out*in, kh^2)
+    resized_flat = flat @ P.T  # (out*in, target^2)
+    return resized_flat.reshape(out_ch, in_ch, target_size, target_size)
 
-    model = torch.hub.load("facebookresearch/dinov2", modelname)  #
 
-    input_tensor = model.pos_embed
-    tensor_corr_shape = interpolate_pos_encoding(input_tensor, 16, 16)
-    pos_embed = nn.Parameter(torch.zeros(1, 257))
+def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14", patch_size=14, img_size=224):
+    """Downloads the pretrained checkpoint, then adapts it to a different
+    patch_size / crop resolution:
+      - PI-resizes patch_embed.proj's conv kernel (e.g. 14x14 -> 8x8) --
+        required whenever cfg.student.patch_size differs from the
+        checkpoint's native patch size, or the token grid this backbone
+        actually produces silently won't match what the rest of the config
+        (MaskingGenerator, structure block, morph_feat grid, etc.) expects.
+      - Interpolates pos_embed to the resulting (img_size // patch_size)
+        token grid, instead of the previous hardcoded 16x16 target.
+    """
+    model = torch.hub.load("facebookresearch/dinov2", modelname)
+
+    old_conv = model.patch_embed.proj
+    old_patch_size = old_conv.kernel_size[0]
+    if patch_size != old_patch_size:
+        logger.info(f"OPTIONS -- PI-resizing patch_embed kernel {old_patch_size}x{old_patch_size} "
+                    f"-> {patch_size}x{patch_size}")
+        new_weight = pi_resize_patch_kernel(old_conv.weight.data, patch_size)
+        new_conv = nn.Conv2d(
+            old_conv.in_channels, old_conv.out_channels,
+            kernel_size=patch_size, stride=patch_size,
+            bias=old_conv.bias is not None,
+        )
+        new_conv.weight.data = new_weight
+        if old_conv.bias is not None:
+            new_conv.bias.data = old_conv.bias.data.clone()
+        model.patch_embed.proj = new_conv
+        if hasattr(model.patch_embed, "patch_size"):
+            model.patch_embed.patch_size = (patch_size, patch_size)
+        if hasattr(model.patch_embed, "img_size"):
+            model.patch_embed.img_size = (img_size, img_size)
+
+    grid_side = img_size // patch_size
+    tensor_corr_shape = interpolate_pos_encoding(model.pos_embed, grid_side, grid_side)
+    pos_embed = nn.Parameter(torch.zeros_like(tensor_corr_shape))
     pos_embed.data = tensor_corr_shape
     model.pos_embed = pos_embed
+    logger.info(f"OPTIONS -- pos_embed interpolated to {grid_side}x{grid_side} = {grid_side * grid_side} patches")
     return model
 def load_backbone_checkpoint(backbone: nn.Module, checkpoint_path: str):
     """
@@ -203,8 +252,12 @@ class SSLMetaArch(nn.Module):
         teacher_model_dict = dict()
 
         if cfg.student.arch in ["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"]:
-            student_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
-            teacher_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
+            student_backbone = get_downloaded_dino_vit_interpolated(
+                cfg.student.arch, patch_size=cfg.student.patch_size, img_size=cfg.crops.global_crops_size
+            )
+            teacher_backbone = get_downloaded_dino_vit_interpolated(
+                cfg.student.arch, patch_size=cfg.student.patch_size, img_size=cfg.crops.global_crops_size
+            )
             embed_dict = {"dinov2_vits14": 384, "dinov2_vitb14": 768, "dinov2_vitl14": 1024, "dinov2_vitg14": 1536}
             embed_dim = embed_dict[cfg.student.arch]
         else:
@@ -230,6 +283,10 @@ class SSLMetaArch(nn.Module):
         self.do_ibot = cfg.ibot.loss_weight > 0
         self.do_smooth_rank_loss = cfg.dino.smooth_rank_loss_weight > 0
         self.ibot_separate_head = cfg.ibot.separate_head
+
+        # --- morphology / feature-sharpener options -------------------------
+        self.do_morphology = cfg.morphology.enabled
+        self.do_feature_sharpener = cfg.feature_sharpener.enabled
 
         logger.info("OPTIONS -- DINO")
 
@@ -287,6 +344,29 @@ class SSLMetaArch(nn.Module):
             else:
                 logger.info("OPTIONS -- IBOT -- head shared with DINO")
 
+        # --- morphology-aware structure block + FeatureSharpener -------------
+        # NOTE: the struct token is *added* to the cls token (not concatenated),
+        # so embed_dim is unchanged and dino_head/ibot_head above don't need a
+        # doubled in_dim. This also keeps local-crop cls tokens (which never go
+        # through the structure block -- see forward_backward) dimensionally
+        # compatible with global-crop cls tokens inside the same xFormers
+        # BlockDiagonalMask batch, and keeps the shared dino/ibot-head buffer
+        # path (ibot_separate_head=False) intact.
+        if self.do_morphology:
+            student_model_dict["structure_block"] = StructureAttentionBlock(
+                embed_dim, use_morphology_bias=(cfg.morphology.mode == "morph")
+            )
+            teacher_model_dict["structure_block"] = StructureAttentionBlock(
+                embed_dim, use_morphology_bias=(cfg.morphology.mode == "morph")
+            )
+            logger.info(f"OPTIONS -- MORPHOLOGY -- enabled, mode: {cfg.morphology.mode}")
+
+        if self.do_feature_sharpener:
+            student_model_dict["sharpener"] = FeatureSharpener(
+                dim=embed_dim, upsample_factor=cfg.feature_sharpener.upsample_factor
+            )
+            logger.info(f"OPTIONS -- FEATURE SHARPENER -- enabled, weight: {cfg.feature_sharpener.weight}")
+
         self.need_to_synchronize_fsdp_streams = True
 
         self.student = nn.ModuleDict(student_model_dict)
@@ -321,6 +401,12 @@ class SSLMetaArch(nn.Module):
         upperbound = images["upperbound"]
         masks_weight = images["masks_weight"].cuda(non_blocking=True)
 
+        # --- morphology feats for the global crops, same batch order as
+        # collated_global_crops (see collate_morph_data_and_cast) -----------
+        morph_feats = None
+        if self.do_morphology:
+            morph_feats = images["collated_global_morph_feats"].cuda(non_blocking=True)
+
         n_local_crops_loss_terms = max(n_local_crops * n_global_crops, 1)
         n_global_crops_loss_terms = (n_global_crops - 1) * n_global_crops
 
@@ -336,10 +422,21 @@ class SSLMetaArch(nn.Module):
             x, n_global_crops_teacher = global_crops, n_global_crops
             teacher_backbone_output_dict = self.teacher.backbone(x, is_training=True)
             teacher_cls_tokens = teacher_backbone_output_dict["x_norm_clstoken"]
+            ibot_teacher_patch_tokens = teacher_backbone_output_dict["x_norm_patchtokens"]
+
+            # --- fuse in the morphology structure token, BEFORE the
+            # chunk/reverse/cat below, so morph_feats (still in original
+            # collated-crop order) lines up with teacher_cls_tokens/patch
+            # tokens (also still in that order at this point) -------------
+            if self.do_morphology:
+                _, struct_tok_teacher, _, _ = self.teacher.structure_block(
+                    ibot_teacher_patch_tokens, morph_feats
+                )
+                teacher_cls_tokens = teacher_cls_tokens + struct_tok_teacher
+
             teacher_cls_tokens = teacher_cls_tokens.chunk(n_global_crops_teacher)
             # watch out: these are chunked and cat'd in reverse so A is matched to B in the global crops dino loss
             teacher_cls_tokens = torch.cat((teacher_cls_tokens[1], teacher_cls_tokens[0]))
-            ibot_teacher_patch_tokens = teacher_backbone_output_dict["x_norm_patchtokens"]
             _dim = ibot_teacher_patch_tokens.shape[-1]
             n_cls_tokens = teacher_cls_tokens.shape[0]
 
@@ -435,17 +532,28 @@ class SSLMetaArch(nn.Module):
         inputs_for_student_head_list = []
 
         # 1a: local crops cls tokens
+        # (local crops are never run through the structure block: morph_feats
+        # were only computed for the global-crop mask geometry -- see
+        # MorphAwareDataAugmentationDINO. Local cls tokens stay embed_dim,
+        # same as global ones below, since fusion is additive not concat.)
         student_local_cls_tokens = student_local_backbone_output_dict["x_norm_clstoken"]
         inputs_for_student_head_list.append(student_local_cls_tokens.unsqueeze(0))
 
         # 1b: global crops cls tokens
         student_global_cls_tokens = student_global_backbone_output_dict["x_norm_clstoken"]
+        ibot_student_patch_tokens = student_global_backbone_output_dict["x_norm_patchtokens"]
+
+        if self.do_morphology:
+            _, struct_tok_student, _, _ = self.student.structure_block(
+                ibot_student_patch_tokens, morph_feats
+            )
+            student_global_cls_tokens = student_global_cls_tokens + struct_tok_student
+
         inputs_for_student_head_list.append(student_global_cls_tokens.unsqueeze(0))
 
         # 1c: global crops patch tokens
         if do_ibot:
             _dim = student_global_backbone_output_dict["x_norm_clstoken"].shape[-1]
-            ibot_student_patch_tokens = student_global_backbone_output_dict["x_norm_patchtokens"]
             buffer_tensor_patch_tokens = ibot_student_patch_tokens.new_zeros(upperbound, _dim)
             buffer_tensor_patch_tokens[:n_masked_patches].copy_(
                 torch.index_select(ibot_student_patch_tokens.flatten(0, 1), dim=0, index=mask_indices_list)
@@ -539,6 +647,24 @@ class SSLMetaArch(nn.Module):
 
             # accumulate loss
             loss_accumulator += self.ibot_loss_weight * ibot_patch_loss
+
+        # --- FeatureSharpener regularizer (student-only; operates on the raw
+        # patch-token grid before the structure block, same as your standalone
+        # script) -------------------------------------------------------------
+        if self.do_feature_sharpener:
+            B_fs, N_fs, D_fs = ibot_student_patch_tokens.shape
+            side = int(round(N_fs ** 0.5))
+            assert side * side == N_fs, (
+                f"FeatureSharpener needs a square patch grid, got {N_fs} patches; "
+                f"check crops.global_crops_size / student.patch_size"
+            )
+            grid = ibot_student_patch_tokens.transpose(1, 2).reshape(B_fs, D_fs, side, side)
+            sharpened = self.student.sharpener(grid, global_crops)
+            fs_loss = FeatureSharpener.down_consistency_loss(
+                sharpened, grid
+            ) + 0.1 * FeatureSharpener.edge_aware_smoothness_loss(sharpened, global_crops)
+            loss_dict["fs_loss"] = fs_loss
+            loss_accumulator += self.cfg.feature_sharpener.weight * fs_loss
 
         self.backprop_loss(loss_accumulator)
 

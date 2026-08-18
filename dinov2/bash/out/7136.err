@@ -1,0 +1,154 @@
+W0817 19:43:17.316000 4193415 site-packages/torch/distributed/run.py:766] 
+W0817 19:43:17.316000 4193415 site-packages/torch/distributed/run.py:766] *****************************************
+W0817 19:43:17.316000 4193415 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0817 19:43:17.316000 4193415 site-packages/torch/distributed/run.py:766] *****************************************
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260817_194324-gpdx2w9c
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/gpdx2w9c
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260817_194324-9024hwo0
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/9024hwo0
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W817 19:43:26.247767427 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+[rank0]:[W817 19:43:26.429717849 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 538, in __getattr__
+[rank0]:     return super().__getattr__(name)  # defer to nn.Module's logic
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'FullyShardedDataParallel' object has no attribute '_handles'
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 541, in do_train
+[rank0]:     loss_dict, class_tokens = model.forward_backward(data, teacher_temp=teacher_temp)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/ssl_meta_arch_v0.py", line 509, in forward_backward
+[rank0]:     reshard_fsdp_model(self.teacher)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 76, in reshard_fsdp_model
+[rank0]:     free_if_fsdp(m)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 65, in free_if_fsdp
+[rank0]:     handles = x._handles
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 540, in __getattr__
+[rank0]:     return getattr(self._fsdp_wrapped_module, name)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'DinoVisionTransformer' object has no attribute '_handles'
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 538, in __getattr__
+[rank0]:     return super().__getattr__(name)  # defer to nn.Module's logic
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'FullyShardedDataParallel' object has no attribute '_handles'
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 541, in do_train
+[rank0]:     loss_dict, class_tokens = model.forward_backward(data, teacher_temp=teacher_temp)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/ssl_meta_arch_v0.py", line 509, in forward_backward
+[rank0]:     reshard_fsdp_model(self.teacher)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 76, in reshard_fsdp_model
+[rank0]:     free_if_fsdp(m)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 65, in free_if_fsdp
+[rank0]:     handles = x._handles
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 540, in __getattr__
+[rank0]:     return getattr(self._fsdp_wrapped_module, name)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'DinoVisionTransformer' object has no attribute '_handles'
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 538, in __getattr__
+[rank1]:     return super().__getattr__(name)  # defer to nn.Module's logic
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank1]:     raise AttributeError(
+[rank1]: AttributeError: 'FullyShardedDataParallel' object has no attribute '_handles'
+
+[rank1]: During handling of the above exception, another exception occurred:
+
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank1]:     main(args)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank1]:     do_train(cfg, model, resume=not args.no_resume)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 541, in do_train
+[rank1]:     loss_dict, class_tokens = model.forward_backward(data, teacher_temp=teacher_temp)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/ssl_meta_arch_v0.py", line 509, in forward_backward
+[rank1]:     reshard_fsdp_model(self.teacher)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 76, in reshard_fsdp_model
+[rank1]:     free_if_fsdp(m)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 65, in free_if_fsdp
+[rank1]:     handles = x._handles
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 540, in __getattr__
+[rank1]:     return getattr(self._fsdp_wrapped_module, name)
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank1]:     raise AttributeError(
+[rank1]: AttributeError: 'DinoVisionTransformer' object has no attribute '_handles'
+W0817 19:59:37.332000 4193415 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 4193562 closing signal SIGTERM
+E0817 19:59:38.048000 4193415 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 4193561) of binary: /dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/python3.10
+Traceback (most recent call last):
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/torchrun", line 6, in <module>
+    sys.exit(main())
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-17_19:59:37
+  host      : tia-dgxa100.dcs.warwick.ac.uk
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 4193561)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

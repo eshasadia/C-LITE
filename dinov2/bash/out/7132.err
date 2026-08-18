@@ -1,0 +1,97 @@
+W0817 19:01:55.345000 4160037 site-packages/torch/distributed/run.py:766] 
+W0817 19:01:55.345000 4160037 site-packages/torch/distributed/run.py:766] *****************************************
+W0817 19:01:55.345000 4160037 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0817 19:01:55.345000 4160037 site-packages/torch/distributed/run.py:766] *****************************************
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260817_190202-siqu1f9o
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/siqu1f9o
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260817_190202-x7gjpelv
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/x7gjpelv
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W817 19:02:04.227960565 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W817 19:02:04.435565165 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank1]:     main(args)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank1]:     do_train(cfg, model, resume=not args.no_resume)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 456, in do_train
+[rank1]:     dataset1 = ImmunoctoHEDataset(
+[rank1]: NameError: name 'ImmunoctoHEDataset' is not defined
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 456, in do_train
+[rank0]:     dataset1 = ImmunoctoHEDataset(
+[rank0]: NameError: name 'ImmunoctoHEDataset' is not defined
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 673, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 657, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 456, in do_train
+[rank0]:     dataset1 = ImmunoctoHEDataset(
+[rank0]: NameError: name 'ImmunoctoHEDataset' is not defined
+W0817 19:02:09.475000 4160037 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 4160105 closing signal SIGTERM
+E0817 19:02:09.589000 4160037 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 4160106) of binary: /dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/python3.10
+Traceback (most recent call last):
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/torchrun", line 6, in <module>
+    sys.exit(main())
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-17_19:02:09
+  host      : tia-dgxa100.dcs.warwick.ac.uk
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 4160106)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

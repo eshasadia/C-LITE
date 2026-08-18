@@ -1,0 +1,142 @@
+W0818 05:50:28.952000 474290 site-packages/torch/distributed/run.py:766] 
+W0818 05:50:28.952000 474290 site-packages/torch/distributed/run.py:766] *****************************************
+W0818 05:50:28.952000 474290 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0818 05:50:28.952000 474290 site-packages/torch/distributed/run.py:766] *****************************************
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/attention.py:24: UserWarning: xFormers is available (Attention)
+  warnings.warn("xFormers is available (Attention)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/block.py:50: UserWarning: xFormers is available (Block)
+  warnings.warn("xFormers is available (Block)")
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/layers/swiglu_ffn.py:43: UserWarning: xFormers is available (SwiGLU)
+  warnings.warn("xFormers is available (SwiGLU)")
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /dcs/pg23/u5552013/.netrc.
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Currently logged in as: eshasadia2015 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260818_055036-oysysf25
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/oysysf25
+wandb: Tracking run with wandb version 0.27.0
+wandb: Run data is saved locally in /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/wandb/run-20260818_055036-7bgrqwlz
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run dinov2_p4
+wandb: ⭐️ View project at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2
+wandb: 🚀 View run at https://wandb.ai/eshasadia2015-university-of-warwick/dinov2/runs/7bgrqwlz
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W818 05:50:37.106282803 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+[rank0]:[W818 05:50:38.279570921 ProcessGroupNCCL.cpp:4718] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can pecify device_id in init_process_group() to force use of a particular device.
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+Using cache found in /dcs/pg23/u5552013/.cache/torch/hub/facebookresearch_dinov2_main
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 651, in <module>
+[rank1]:     main(args)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 635, in main
+[rank1]:     do_train(cfg, model, resume=not args.no_resume)
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 388, in do_train
+[rank1]:     ckpt = checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume)
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 227, in resume_or_load
+[rank1]:     return self.load(path, checkpointables=[])
+[rank1]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 365, in load
+[rank1]:     return super().load(*args, **kwargs)
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 155, in load
+[rank1]:     checkpoint = self._load_file(path)
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 252, in _load_file
+[rank1]:     return torch.load(f, map_location=torch.device("cpu"))
+[rank1]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/serialization.py", line 1524, in load
+[rank1]:     raise pickle.UnpicklingError(_get_wo_message(str(e))) from None
+[rank1]: _pickle.UnpicklingError: Weights only load failed. This file can still be loaded, to do so you have two options, [1mdo those steps only if you trust the source of the checkpoint[0m. 
+[rank1]: 	(1) In PyTorch 2.6, we changed the default value of the `weights_only` argument in `torch.load` from `False` to `True`. Re-running `torch.load` with `weights_only` set to `False` will likely succeed, but it can result in arbitrary code execution. Do it only if you got the file from a trusted source.
+[rank1]: 	(2) Alternatively, to load with `weights_only=True` please check the recommended steps in the following error message.
+[rank1]: 	WeightsUnpickler error: Unsupported global: GLOBAL numpy.core.multiarray.scalar was not an allowed global by default. Please use `torch.serialization.add_safe_globals([numpy.core.multiarray.scalar])` or the `torch.serialization.safe_globals([numpy.core.multiarray.scalar])` context manager to allowlist this global if you trust this class/function.
+
+[rank1]: Check the documentation of torch.load to learn more about types accepted by default with weights_only https://pytorch.org/docs/stable/generated/torch.load.html.
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 651, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 635, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 388, in do_train
+[rank0]:     ckpt = checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 227, in resume_or_load
+[rank0]:     return self.load(path, checkpointables=[])
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 365, in load
+[rank0]:     return super().load(*args, **kwargs)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 155, in load
+[rank0]:     checkpoint = self._load_file(path)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 252, in _load_file
+[rank0]:     return torch.load(f, map_location=torch.device("cpu"))
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/serialization.py", line 1524, in load
+[rank0]:     raise pickle.UnpicklingError(_get_wo_message(str(e))) from None
+[rank0]: _pickle.UnpicklingError: Weights only load failed. This file can still be loaded, to do so you have two options, [1mdo those steps only if you trust the source of the checkpoint[0m. 
+[rank0]: 	(1) In PyTorch 2.6, we changed the default value of the `weights_only` argument in `torch.load` from `False` to `True`. Re-running `torch.load` with `weights_only` set to `False` will likely succeed, but it can result in arbitrary code execution. Do it only if you got the file from a trusted source.
+[rank0]: 	(2) Alternatively, to load with `weights_only=True` please check the recommended steps in the following error message.
+[rank0]: 	WeightsUnpickler error: Unsupported global: GLOBAL numpy.core.multiarray.scalar was not an allowed global by default. Please use `torch.serialization.add_safe_globals([numpy.core.multiarray.scalar])` or the `torch.serialization.safe_globals([numpy.core.multiarray.scalar])` context manager to allowlist this global if you trust this class/function.
+
+[rank0]: Check the documentation of torch.load to learn more about types accepted by default with weights_only https://pytorch.org/docs/stable/generated/torch.load.html.
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 651, in <module>
+[rank0]:     main(args)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 635, in main
+[rank0]:     do_train(cfg, model, resume=not args.no_resume)
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py", line 388, in do_train
+[rank0]:     ckpt = checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 227, in resume_or_load
+[rank0]:     return self.load(path, checkpointables=[])
+[rank0]:   File "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/fsdp/__init__.py", line 365, in load
+[rank0]:     return super().load(*args, **kwargs)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 155, in load
+[rank0]:     checkpoint = self._load_file(path)
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/fvcore/common/checkpoint.py", line 252, in _load_file
+[rank0]:     return torch.load(f, map_location=torch.device("cpu"))
+[rank0]:   File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/serialization.py", line 1524, in load
+[rank0]:     raise pickle.UnpicklingError(_get_wo_message(str(e))) from None
+[rank0]: _pickle.UnpicklingError: Weights only load failed. This file can still be loaded, to do so you have two options, [1mdo those steps only if you trust the source of the checkpoint[0m. 
+[rank0]: 	(1) In PyTorch 2.6, we changed the default value of the `weights_only` argument in `torch.load` from `False` to `True`. Re-running `torch.load` with `weights_only` set to `False` will likely succeed, but it can result in arbitrary code execution. Do it only if you got the file from a trusted source.
+[rank0]: 	(2) Alternatively, to load with `weights_only=True` please check the recommended steps in the following error message.
+[rank0]: 	WeightsUnpickler error: Unsupported global: GLOBAL numpy.core.multiarray.scalar was not an allowed global by default. Please use `torch.serialization.add_safe_globals([numpy.core.multiarray.scalar])` or the `torch.serialization.safe_globals([numpy.core.multiarray.scalar])` context manager to allowlist this global if you trust this class/function.
+
+[rank0]: Check the documentation of torch.load to learn more about types accepted by default with weights_only https://pytorch.org/docs/stable/generated/torch.load.html.
+W0818 05:50:45.789000 474290 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 474408 closing signal SIGTERM
+E0818 05:50:46.153000 474290 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 474407) of binary: /dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/python3.10
+Traceback (most recent call last):
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/bin/torchrun", line 6, in <module>
+    sys.exit(main())
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/dcs/pg23/u5552013/.conda/envs/dinov3-class/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-18_05:50:45
+  host      : tia-dgxa100.dcs.warwick.ac.uk
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 474407)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
