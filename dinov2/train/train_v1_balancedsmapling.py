@@ -37,7 +37,7 @@ from dinov2.data import (
 import random
 from dinov2.fsdp import FSDPCheckpointer
 from dinov2.logging import MetricLogger
-from dinov2.train.ssl_meta_arch_v1_gram import SSLMetaArch
+from dinov2.train.ssl_meta_arch_v0 import SSLMetaArch
 from dinov2.utils.config import setup
 from dinov2.utils.utils import CosineScheduler, smooth_rank_measure
 from torch.utils.data import Dataset
@@ -249,7 +249,9 @@ def log_attention_visualization(
     wandb.log(logged, step=iteration)
     logger.info(f"Logged attention visualization for {sample.shape[0]} sample(s) at iteration {iteration}")
 
-
+# ==========================================================================
+# End attention visualization
+# ==========================================================================
 sys.path.append('/tia/phd-data/u5552013/ImmunoDINO_datasets/PathoCellbench/Pathology-Foundation-Model-Benchmark/src')
 from benchmark.dataset.lmdb_dataset import LMDBDataset
 import os
@@ -257,16 +259,44 @@ local_rank = int(os.environ["LOCAL_RANK"])
 torch.cuda.set_device(local_rank)
 device = torch.device(f"cuda:{local_rank}")
 
+
+# ==========================================================================
+# Tissue-pooled balanced batch sampler
+# ==========================================================================
 class TissueSequentialBatchSampler(torch.utils.data.Sampler):
+    """
+    Combines two kinds of sub-datasets inside one ConcatDataset into a
+    single batch stream:
+
+      - "additional" (non-TCGA) sources: each contributes a FIXED count per
+        batch, drawn from its own no-repeat-until-exhausted-then-reshuffle
+        queue that runs continuously, batch after batch.
+
+      - TCGA sources: pooled together by tissue-type NAME (union across
+        sources, not intersection, and NOT requiring every source to report
+        the same number of types -- e.g. one source may have 18 distinct
+        cancer types, another 20; a type present in only one source simply
+        draws its samples from that one source, a type present in several
+        draws from the union of all of them). Every batch draws
+        `samples_per_tissue` images from EVERY distinct tissue type found
+        across all TCGA sources combined, each with its own no-repeat-
+        until-exhausted-then-reshuffle queue.
+
+    This replaces an earlier "cycle through TCGA sources one at a time"
+    design, which assumed every TCGA source reported an identical tissue-
+    type count -- that assumption doesn't hold in practice (different
+    METADATA_CSV files cover different cancer-type sets per source), so
+    tissue types are pooled by name across sources instead.
+    """
 
     def __init__(
         self,
         dataset_sizes,                 # sizes of ALL sub-datasets, in ConcatDataset order
         plain_indices,                 # indices of additional (non-TCGA) datasets
         plain_samples_per_dataset,     # per-batch count for each, same order as plain_indices
-        tcga_indices,                  # indices of the TCGA datasets, IN CYCLE ORDER
+        tcga_indices,                  # indices of the TCGA datasets
         tcga_sample_types,             # list of .sample_types for each dataset in tcga_indices
-        samples_per_tissue,            # count drawn per tissue type, per batch, while on a TCGA source
+        samples_per_tissue,            # count drawn per tissue type, per batch
         seed=0,
         rank=0,
         world_size=1,
@@ -288,42 +318,28 @@ class TissueSequentialBatchSampler(torch.utils.data.Sampler):
             for d in plain_indices
         ]
 
-        # TCGA datasets: per-source, per-tissue-type pools (kept SEPARATE per source)
-        self.tcga_indices = tcga_indices
-        self.tcga_type_pools = []       # per TCGA source: dict{type: np.array(global idx)}
-        self.tcga_types_per_source = []  # per TCGA source: sorted list of its type names
+        # Pool ALL TCGA sources together by tissue-type NAME (union, not
+        # intersection, and no requirement that source type-counts match).
+        # A type present in only one source draws from that source alone;
+        # a type present in several sources draws from all of them.
+        type_to_indices = defaultdict(list)
         for d_idx, types in zip(tcga_indices, tcga_sample_types):
             offset = self.offsets[d_idx]
-            type_to_idx = defaultdict(list)
             for local_i, t in enumerate(types):
-                type_to_idx[t].append(offset + local_i)
-            type_to_idx = {t: np.array(v)[rank::world_size] for t, v in type_to_idx.items()}
-            self.tcga_type_pools.append(type_to_idx)
-            self.tcga_types_per_source.append(sorted(type_to_idx.keys()))
+                type_to_indices[t].append(offset + local_i)
 
-        n_types_each = [len(t) for t in self.tcga_types_per_source]
-        assert len(set(n_types_each)) == 1, (
-            f"TCGA sources report different tissue-type counts: {n_types_each} "
-            f"-- check the METADATA_CSV files for each TCGA source."
-        )
-        self.n_tissue_types = n_types_each[0]
+        self.tissue_types = sorted(type_to_indices.keys())
+        self.tissue_pools = [
+            np.array(type_to_indices[t])[rank::world_size] for t in self.tissue_types
+        ]
+        self.n_tissue_types = len(self.tissue_types)
 
         self.nominal_batch_size = sum(self.plain_counts) + self.samples_per_tissue * self.n_tissue_types
-        logger.info(f"[TissueSequentialBatchSampler] {len(tcga_indices)} TCGA sources, "
-                    f"{self.n_tissue_types} tissue types each")
+        logger.info(f"[TissueSequentialBatchSampler] {self.n_tissue_types} distinct tissue types "
+                    f"pooled across {len(tcga_indices)} TCGA sources: {self.tissue_types}")
         logger.info(f"[TissueSequentialBatchSampler] nominal batch size = {self.nominal_batch_size} "
                     f"({sum(self.plain_counts)} additional + "
                     f"{self.samples_per_tissue} x {self.n_tissue_types} tissue)")
-
-    def _fresh_source_queues(self, src_ptr, rng):
-        pools = self.tcga_type_pools[src_ptr]
-        types = self.tcga_types_per_source[src_ptr]
-        queues = []
-        for t in types:
-            perm = pools[t].copy()
-            rng.shuffle(perm)
-            queues.append(perm.tolist())
-        return queues, [0] * len(types)
 
     def __iter__(self):
         rng = np.random.default_rng(self.seed + self.rank)
@@ -336,8 +352,8 @@ class TissueSequentialBatchSampler(torch.utils.data.Sampler):
         plain_queues = [fresh_perm(p) for p in self.plain_pools]
         plain_ptrs = [0] * len(self.plain_pools)
 
-        tcga_src_ptr = 0
-        type_queues, type_ptrs = self._fresh_source_queues(tcga_src_ptr, rng)
+        tissue_queues = [fresh_perm(p) for p in self.tissue_pools]
+        tissue_ptrs = [0] * len(self.tissue_pools)
 
         while True:
             batch = []
@@ -351,23 +367,24 @@ class TissueSequentialBatchSampler(torch.utils.data.Sampler):
                     batch.append(plain_queues[j][plain_ptrs[j]])
                     plain_ptrs[j] += 1
 
-            # -- current TCGA source, stratified by tissue type --
+            # -- every distinct TCGA tissue type, pooled across sources --
             for j in range(self.n_tissue_types):
-                remaining = len(type_queues[j]) - type_ptrs[j]
-                take = min(self.samples_per_tissue, remaining)
-                for _ in range(take):
-                    batch.append(type_queues[j][type_ptrs[j]])
-                    type_ptrs[j] += 1
+                for _ in range(self.samples_per_tissue):
+                    if tissue_ptrs[j] >= len(tissue_queues[j]):
+                        tissue_queues[j] = fresh_perm(self.tissue_pools[j])
+                        tissue_ptrs[j] = 0
+                    batch.append(tissue_queues[j][tissue_ptrs[j]])
+                    tissue_ptrs[j] += 1
 
             yield batch
 
-            # move to next TCGA source once every type in the current one is drained
-            if all(type_ptrs[j] >= len(type_queues[j]) for j in range(self.n_tissue_types)):
-                tcga_src_ptr = (tcga_src_ptr + 1) % len(self.tcga_indices)
-                type_queues, type_ptrs = self._fresh_source_queues(tcga_src_ptr, rng)
-
     def __len__(self):
         return int(1e18)  # infinite stream, like SHARDED_INFINITE
+# ==========================================================================
+# End tissue-pooled balanced batch sampler
+# ==========================================================================
+
+
 def get_args_parser(add_help: bool = True):
     parser = argparse.ArgumentParser("DINOv2 training", add_help=add_help)
     parser.add_argument(
@@ -590,11 +607,10 @@ def do_train(cfg, model, resume=False):
     # >>> tune these; they must sum to (target_batch_size - samples_per_tissue * n_tissue_types) <<<
     plain_indices = [0, 1, 2, 3, 4, 5]  # ImmunoctoHE, CONIC, PanNuke, PUMA, Monkey, MIDOG
     plain_samples_per_dataset = [5, 5, 5, 5, 4, 4]
-
     tcga_indices = [6, 7, 8, 9]  # dataset8 (TCGA), dataset9 (TCGA1), dataset10 (TCGA2), dataset11 (TCGA3)
     tcga_sample_types = [dataset8.sample_types, dataset9.sample_types,
                           dataset10.sample_types, dataset11.sample_types]
-    samples_per_tissue = 12  # >>> images per TCGA tissue type per batch <<<
+    samples_per_tissue = 12  # >>> images per distinct TCGA tissue type per batch <<<
 
     batch_sampler = TissueSequentialBatchSampler(
         dataset_sizes=dataset_sizes,

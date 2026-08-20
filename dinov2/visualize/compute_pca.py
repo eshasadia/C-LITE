@@ -27,11 +27,11 @@ IMAGE_SIZE = 64
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
-OUTPUT_DIR = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/output_visuals/pca/9999"
+OUTPUT_DIR = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/output_visuals/pca/12999"
 
 # ---- fill this in ----
 image_path = "/tia/phd-data/u5552013/ImmunoDINO_datasets/PanNuke/Fold1_cell_patches/Connective/fold1_00002_00010_Connective_Breast.png"
-ckpt_path = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4/dinov2_p4/eval/training_9999/teacher_checkpoint.pth"
+ckpt_path = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4/dinov2_p4/eval/training_12999/teacher_checkpoint.pth"
 
 
 def get_args_parser(add_help=True):

@@ -33,8 +33,17 @@ parser.add_argument(
 # Supported models:
 # ctranspath, resnet50, resnet50_full, owkin
 # dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
-# celldino, dinov3_vits16, dinov3_convnext, virchow2, cellvitpp, atrous_convnext_cell
+# celldino, vit_small_patch7, dinov2_p4
+# dinov3_vits16, dinov3_convnext, virchow2, cellvitpp, atrous_convnext_cell
 # hovernext, histoplus (gated HF model, academic use only -- see HistoPLUS docstring)
+#
+# dinov2_p4: the ImmunoDINO continued-pretraining checkpoint from
+# train_v1_balancedsmapling.py (dinov2_vits14 base, patch_embed PI-resized
+# to 4x4, global_crops_size=64, 4 register tokens, trained with the
+# tissue-balanced TCGA sampler + GRAM). Requires --checkpoint pointing at a
+# model_XXXXXXX.rank_0.pth (or do_test() teacher_checkpoint.pth) file. See
+# get_dino_p4_finetuned() in models/return_model.py for accepted checkpoint
+# formats and the register-token caveat noted in its docstring.
 
 parser.add_argument(
     "--dataset",
@@ -758,6 +767,10 @@ def main(args):
     folder_name = args.model_name
 
     # Add dataset-specific suffix if using checkpoint with dinov2
+    # (also matches "dinov2_p4" since its first "_"-split segment is
+    # "dinov2" too -- the ImmunoDINO continued-pretraining checkpoint gets
+    # the same readable dataset-suffixed folder naming as the other
+    # dinov2_* variants below, no extra branch needed.)
     if args.model_name.split("_")[0] == "dinov2" and args.checkpoint is not None:
         dataset_suffixes = {
             "immunocto": "_celldino",

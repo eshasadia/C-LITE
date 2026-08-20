@@ -145,7 +145,7 @@ else:
     backbone, _, _ = build_model_from_cfg(cfg)
 
 # 2. Load the teacher checkpoint
-ckpt_path = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4/dinov2_p4/eval/training_9999/teacher_checkpoint.pth"
+ckpt_path = "/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4_gram/dinov2_p4_gram/eval/training_999/teacher_checkpoint.pth"
 load_backbone_checkpoint(backbone, ckpt_path)
 backbone = backbone.cuda().eval()
 
@@ -178,5 +178,5 @@ for i in range(images.shape[0]):
     img_rgb = _unnormalize_image(images[i])
     grid = _build_attention_grid(img_rgb, attn_maps[i], alpha=0.5, max_heads=8)
     grid.save(
-        f"/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/output_visuals/attention/9999/attn_sample_{i}.png"
+        f"/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/output_visuals/attention_gram/999/attn_sample_{i}.png"
     )

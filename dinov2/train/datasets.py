@@ -311,6 +311,7 @@ class BalancedTCGACellCropDatasetBase(Dataset):
             self.samples.extend(samples_t[:min_count])
 
         random.shuffle(self.samples)
+        self.sample_types = [self.stores[s_idx]["type"] for s_idx, _ in self.samples]
 
         print(
             f"[{type(self).__name__}] "
@@ -318,7 +319,6 @@ class BalancedTCGACellCropDatasetBase(Dataset):
             f"Samples/type: {min_count} | "
             f"Total samples: {len(self.samples)}"
         )
-
     def __len__(self):
         return len(self.samples)
 

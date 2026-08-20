@@ -161,6 +161,13 @@ def get_models(modelname, saved_model_path=None, hf_token=None, cellvitpp_input_
         if DinoVisionTransformer is None:
             raise ImportError("DinoVisionTransformer not available. Check dinov2 installation.")
         model = get_vit_small_patch7_finetuned(saved_model_path, modelname)
+    elif name == "dinov2_p4":
+        # ImmunoDINO continued-pretraining checkpoint from
+        # train_v1_balancedsmapling.py (dinov2_p4 config): dinov2_vits14
+        # base architecture, patch_embed PI-resized 14x14 -> 4x4,
+        # global_crops_size=64, 4 register tokens. See get_dino_p4_finetuned
+        # docstring for accepted checkpoint formats.
+        model = get_dino_p4_finetuned(saved_model_path, "dinov2_vits14")
     elif name in ["microformer_small", "microformer_tiny", "microformer_base"]:
         model = get_microformer_finetuned(saved_model_path, modelname)
     elif name in ["dinov3_vits16", "dinov3_vitb16", "dinov3_vitl16", "dinov3_vitg16"]:
@@ -217,6 +224,135 @@ def get_dino_finetuned_downloaded(saved_model_path, modelname="dinov2_vits14"):
         print(f"[warn] Missing keys ({len(missing)}): {missing[:5]}{'...' if len(missing) > 5 else ''}")
     if unexpected:
         print(f"[warn] Unexpected keys ({len(unexpected)}): {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+
+    model.eval()
+    return model
+
+
+def get_dino_p4_finetuned(saved_model_path, modelname="dinov2_vits14"):
+    """
+    Load the from-scratch-continued ImmunoDINO backbone trained by
+    train_v1_balancedsmapling.py (the dinov2_p4 config): dinov2_vits14 base
+    architecture, PI-resized patch_embed kernel 14x14 -> 4x4, pos_embed
+    interpolated to (64/4)=16 -> 16x16=256 patches, 4 register tokens,
+    global_crops_size=64. Mirrors the exact PI-resize + pos_embed routine
+    used at train time in dinov2/train/ssl_meta_arch_v0.py's
+    get_downloaded_dino_vit_interpolated -- NOT the generic
+    get_downloaded_dino_vit_interpolated() above in this file, which
+    hardcodes a patch14 -> 16x16 pos_embed interpolation with no kernel
+    resize and is wrong for this checkpoint.
+
+    Accepts the checkpoint formats produced by FSDPCheckpointer / do_test()
+    in that training script:
+      {"teacher": {"backbone.xxx": ..., "dino_head.xxx": ...}}   -- do_test() snapshot
+      {"model": {"student.backbone.xxx": ...}}                   -- full FSDP checkpoint
+      {"student": {...}}                                         -- student-only snapshot
+      {"backbone": {...}}                                        -- backbone-only snapshot
+
+    GRAM (`gram_teacher.*`) and contrastive-head keys, if present in the
+    checkpoint, are ignored -- only the plain backbone is loaded here.
+
+    NOTE: register tokens. Training used num_register_tokens=4. The stock
+    torch.hub "dinov2_vits14" architecture loaded below has
+    num_register_tokens=0 by default. Check the printed [warn] Unexpected
+    keys list the first time you run this -- if register-token parameters
+    show up there, they are being silently dropped and this loader needs
+    to build the backbone via dinov2's build_model_from_cfg (like
+    get_vit_small_patch7_finetuned does) with num_register_tokens=4 set
+    explicitly, instead of torch.hub.load, so the architecture actually
+    has slots for them.
+    """
+    if saved_model_path is None:
+        raise ValueError("--checkpoint is required for dinov2_p4")
+
+    PATCH_SIZE = 4
+    IMG_SIZE = 64
+
+    model = torch.hub.load("facebookresearch/dinov2", modelname)
+
+    # PI-resize patch_embed kernel 14x14 -> 4x4 (same routine used at train time)
+    old_conv = model.patch_embed.proj
+    old_patch_size = old_conv.kernel_size[0]
+    if PATCH_SIZE != old_patch_size:
+        src = torch.eye(old_patch_size * old_patch_size).reshape(
+            old_patch_size * old_patch_size, 1, old_patch_size, old_patch_size)
+        resized = nn.functional.interpolate(
+            src, size=(PATCH_SIZE, PATCH_SIZE), mode="bicubic",
+            align_corners=False, antialias=True,
+        )
+        B = resized.reshape(old_patch_size * old_patch_size, PATCH_SIZE * PATCH_SIZE).T
+        P = torch.linalg.pinv(B.T, rcond=1e-4)
+        flat = old_conv.weight.data.reshape(
+            old_conv.out_channels * old_conv.in_channels, old_patch_size * old_patch_size)
+        new_weight = (flat @ P.T).reshape(
+            old_conv.out_channels, old_conv.in_channels, PATCH_SIZE, PATCH_SIZE)
+
+        new_conv = nn.Conv2d(
+            old_conv.in_channels, old_conv.out_channels,
+            kernel_size=PATCH_SIZE, stride=PATCH_SIZE,
+            bias=old_conv.bias is not None,
+        )
+        new_conv.weight.data = new_weight
+        if old_conv.bias is not None:
+            new_conv.bias.data = old_conv.bias.data.clone()
+        model.patch_embed.proj = new_conv
+        if hasattr(model.patch_embed, "patch_size"):
+            model.patch_embed.patch_size = (PATCH_SIZE, PATCH_SIZE)
+        if hasattr(model.patch_embed, "img_size"):
+            model.patch_embed.img_size = (IMG_SIZE, IMG_SIZE)
+        if hasattr(model, "patch_size"):
+            model.patch_size = PATCH_SIZE
+
+    grid_side = IMG_SIZE // PATCH_SIZE  # 16
+    tensor_corr_shape = _interpolate_pos_encoding(model.pos_embed, grid_side, grid_side)
+    pos_embed = nn.Parameter(torch.zeros_like(tensor_corr_shape))
+    pos_embed.data = tensor_corr_shape
+    model.pos_embed = pos_embed
+
+    pretrained = torch.load(saved_model_path, map_location="cpu", weights_only=False)
+
+    if "teacher" in pretrained:
+        raw_sd = pretrained["teacher"]
+        prefix_strip = ("backbone.",)
+    elif "model" in pretrained:
+        raw_sd = pretrained["model"]
+        prefix_strip = ("student.backbone.", "teacher.backbone.")
+    elif "student" in pretrained:
+        raw_sd = pretrained["student"]
+        prefix_strip = ("backbone.",)
+    elif "backbone" in pretrained:
+        raw_sd = {k.replace("_fsdp_wrapped_module.", ""): v for k, v in pretrained["backbone"].items()}
+        prefix_strip = ()
+    else:
+        raise KeyError(
+            f"Checkpoint at {saved_model_path} has none of 'teacher'/'model'/'student'/'backbone' keys. "
+            f"Available keys: {list(pretrained.keys())}"
+        )
+
+    state_dict = {}
+    for k, v in raw_sd.items():
+        if "dino_head" in k or "ibot_head" in k or "gram_teacher" in k or "contrastive_head" in k:
+            continue
+        matched = False
+        for p in prefix_strip:
+            if k.startswith(p):
+                state_dict[k[len(p):]] = v
+                matched = True
+                break
+        if not matched and not prefix_strip:
+            state_dict[k] = v
+        elif not matched and prefix_strip:
+            continue  # skip keys under a different top-level prefix (e.g. dino_head only under "student.")
+
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    print("\n==== LOAD REPORT (dinov2_p4) ====")
+    print(f"Loaded {len(state_dict) - len(missing)}/{len(state_dict)} tensors")
+    if missing:
+        print(f"[warn] Missing keys ({len(missing)}): {list(missing)[:5]}{'...' if len(missing) > 5 else ''}")
+    if unexpected:
+        print(f"[warn] Unexpected keys ({len(unexpected)}): {list(unexpected)[:5]}{'...' if len(unexpected) > 5 else ''}")
+    if len(state_dict) == 0:
+        print("[warn] 0 tensors found in checkpoint -- check prefix stripping above.")
 
     model.eval()
     return model
@@ -536,6 +672,14 @@ def get_transforms(model_name, cellvitpp_input_size=1024, hovernext_input_size=6
     elif name == "vit_small_patch7":
         # Must match training: global_crops_size=63, patch_size=7 -> 9x9=81 tokens.
         size = 63
+    elif name == "dinov2_p4":
+        # Must match training: global_crops_size=64, patch_size=4 -> 16x16=256 tokens.
+        # NOTE: training used data_transform="hema" (DataAugmentationHEMA),
+        # which may apply stain-specific normalization beyond plain
+        # ImageNet mean/std. If DataAugmentationHEMA has a deterministic
+        # eval-mode transform, mirror its normalization stats here instead
+        # of assuming the generic ImageNet mean/std below are correct.
+        size = 64
     elif name in ["microformer_small", "microformer_tiny", "microformer_base"]:
         size = 64
     elif name in ["atrous_convnext_cell", "dinov3_convnext"]:

@@ -37,7 +37,7 @@ from dinov2.data import (
 import random
 from dinov2.fsdp import FSDPCheckpointer
 from dinov2.logging import MetricLogger
-from dinov2.train.ssl_meta_arch_v0 import SSLMetaArch
+from dinov2.train.ssl_meta_arch_v1_gram import SSLMetaArch
 from dinov2.utils.config import setup
 from dinov2.utils.utils import CosineScheduler, smooth_rank_measure
 from torch.utils.data import Dataset
@@ -476,6 +476,7 @@ def do_train(cfg, model, resume=False):
     total_samples = len(dataset1) + len(dataset2) + len(dataset3)  + len(dataset5) +len(dataset6) + len(dataset7)+len(dataset8)+len(dataset9)+len(dataset10)+len(dataset11)
     print(f"TOTAL samples: {total_samples}\n")
     sampler_type = SamplerType.SHARDED_INFINITE
+    # sampler_type = SamplerType.DISTRIBUTED_INFINITE
     data_loader = make_data_loader(
         dataset=dataset,
         batch_size=cfg.train.batch_size_per_gpu,
@@ -625,7 +626,7 @@ def main(args):
 if __name__ == "__main__":
     args = get_args_parser(add_help=True).parse_args()
     # name = args.name if args.name != "immunocto" else args.name
-    name="dinov2_p4"
+    name="dinov2_p4_gram"
     args.output_dir = os.path.join(args.output_dir, name)
     wandb.init(
     entity="eshasadia2015-university-of-warwick",  # your own account
