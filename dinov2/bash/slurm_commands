@@ -26,10 +26,9 @@ python -c "import torch, torchvision; print(torch.__version__, torchvision.__ver
 torchrun \
   --nproc_per_node=2 \
   --master_port=29502 \
- /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v1_balancedsmapling.py \
-  --config-file /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/configs/train/custom.yaml \
-  --output-dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4 \
-  --no-resume
+ /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train_v0.py \
+  --config-file /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/configs/train/custom_v1.yaml \
+  --output-dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4_gram \
 
 
 # ------visualization of attention maps
@@ -41,19 +40,23 @@ torchrun \
 
 # -------feature extraction------
 # python /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/feature_extraction.py \
-#     --model_name histoplus \
+#     --model_name dinov2_p4 \
 #     --save_dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/ \
 #     --dataset pannuke \
-#     --cellvitpp_input_size 128 \
-#     --num_workers 2 \
-#     --batch_size 32 \
-#     --checkpoint /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/weights/histoplus_cellvit_segmentor_40x.pt \
+#     --num_workers 4 \
+#     --batch_size 64 \
+#     --checkpoint /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4/dinov2_p4/eval/training_10999/teacher_checkpoint.pth \
+    # --cellvitpp_input_size 128 \
 
 
 # ------linear probe evaluation dinov2 based
 # python /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/linear_probe_dino2.py \
-#         --train-features /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/conic/cellvitpp_weights_CellViT-SAM-H-x40-AMP/train_data/train_features.h5 \
-#         --val-features   /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/conic/cellvitpp_weights_CellViT-SAM-H-x40-AMP/val_data/val_features.h5 \
-#         --test-features  /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/conic/cellvitpp_weights_CellViT-SAM-H-x40-AMP/test_data/test_features.h5 \
+#         --train-features /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/pannuke/dinov2_p4_immunodino_pannuke_training_23999_teacher_checkpoint/train_data/train_features.h5 \
+#         --val-features   /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/pannuke/dinov2_p4_immunodino_pannuke_training_23999_teacher_checkpoint/val_features.h5 \
+#         --test-features  /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/pannuke/dinov2_p4_immunodino_pannuke_training_23999_teacher_checkpoint/test_data/test_features.h5 \
 #         --output-dir     runs/linear_probe \
 #         --max-iter 12500 --batch-size 128
+
+# ------linear probe evaluation dinov2 based
+# python /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/eval.py \
+#     --path_folder /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/pannuke/dinov2_p4_immunodino_pannuke_training_23999_teacher_checkpoint \
