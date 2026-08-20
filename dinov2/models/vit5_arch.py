@@ -72,16 +72,17 @@ class VisionRotaryEmbedding(nn.Module):
         self.register_buffer("freqs", freqs)
 
     def forward(self, x): 
+        input_dtype = x.dtype
         ft_seq_len = int(np.sqrt(x.shape[1]))
         t = torch.arange(ft_seq_len).cuda() / ft_seq_len * self.pt_seq_len
 
         freqs = torch.einsum('..., f -> ... f', t, self.freqs)
-        freqs = repeat(freqs, '... n -> ... (n r)', r = 2) # 14*32
-        freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim = -1) # 14*14*64
+        freqs = repeat(freqs, '... n -> ... (n r)', r = 2)
+        freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim = -1)
 
-        freqs_cos = freqs.cos().view(-1, 1, freqs.shape[-1])
-        freqs_sin = freqs.sin().view(-1, 1, freqs.shape[-1])
-        return  x * freqs_cos + rotate_half(x) * freqs_sin
+        freqs_cos = freqs.cos().view(-1, 1, freqs.shape[-1]).to(input_dtype)
+        freqs_sin = freqs.sin().view(-1, 1, freqs.shape[-1]).to(input_dtype)
+        return x * freqs_cos + rotate_half(x) * freqs_sin
 
 def rotate_freqs(freqs, angle_deg):
     assert freqs.ndim == 4 and freqs.shape[0] == freqs.shape[1], "Input must have shape (n, n, d1, d2)"
