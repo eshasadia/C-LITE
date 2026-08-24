@@ -26,6 +26,11 @@ from models.hovernext import HoverNeXt
 from models.histoplus import HistoPLUS
 
 try:
+    from models.cytoformer import CytoFormer
+except ImportError:
+    CytoFormer = None
+
+try:
     from models.resnet_retccl import resnet50 as retccl_res50
 except ImportError:
     retccl_res50 = None
@@ -44,6 +49,15 @@ try:
     from models.convnext_pannuke import load_dinov3_convnext_atrous
 except ImportError:
     load_dinov3_convnext_atrous = None
+
+try:
+    # vit5_dino_wrapper.py lives outside models/ -- adjust to your actual
+    # layout if this import fails. Kept optional (like the other wrapper
+    # imports above) so return_model.py still loads if the ViT-5 wrapper
+    # isn't on the path yet.
+    from vit5_dino_wrapper import load_vit5_teacher_for_eval
+except ImportError:
+    load_vit5_teacher_for_eval = None
 
 
 # ----------------------------------------------------------------------------
@@ -77,7 +91,7 @@ def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
 # return_model.py and return_model_dinov3.py
 # ----------------------------------------------------------------------------
 def get_models(modelname, saved_model_path=None, hf_token=None, cellvitpp_input_size=1024,
-               hovernext_backbone="convnextv2_tiny"):
+               hovernext_backbone="convnextv2_tiny", vit5_patch_size=16):
     """
     Main function to load various pre-trained models for feature extraction.
 
@@ -95,6 +109,16 @@ def get_models(modelname, saved_model_path=None, hf_token=None, cellvitpp_input_
                   this (e.g. 128 or 256) to trade fidelity to SAM-H's
                   original resolution for a large speed/memory win. Must
                   match the `size` used by get_transforms() below.
+        vit5_patch_size: Patch size for vit5_* models only. MUST match
+                  whatever the checkpoint at saved_model_path was actually
+                  trained with -- getting this wrong does not raise an
+                  error, it silently drops patch_embed/pos_embed into
+                  "missing keys" and you end up evaluating a partially
+                  randomly initialized backbone. See
+                  vit5_dino_wrapper.load_vit5_teacher_for_eval's docstring.
+                  Also make sure get_transforms() is called with a matching
+                  vit5_patch_size so the crop size stays a valid multiple
+                  of it.
 
     Returns:
         PyTorch model ready for feature extraction
@@ -126,16 +150,15 @@ def get_models(modelname, saved_model_path=None, hf_token=None, cellvitpp_input_
         model = HoverNeXt(saved_model_path, backbone_name=hovernext_backbone)
     elif name == "histoplus":
         model = HistoPLUS(saved_model_path)
+    elif name == "cytoformer":
+        if CytoFormer is None:
+            raise ImportError(
+                "CytoFormer wrapper not available. Ensure models/cytoformer.py exists "
+                "and the `cytoformer` package (github.com/zhihuanglab/CytoFormer) is "
+                "installed -- pip install git+https://github.com/zhihuanglab/CytoFormer"
+            )
+        model = CytoFormer(saved_model_path)
     elif name == "atrous_convnext_cell":
-        # NOTE: no AtrousConvNeXtCell *class* exists in this codebase -- only
-        # the function load_dinov3_convnext_atrous() in convnext_pannuke.py.
-        # return_model_dinov3.py referenced a class of this name that was
-        # never defined; this branch was dead/broken before the merge.
-        # Wire up the real loader once you confirm its signature, e.g.:
-        #     model = load_dinov3_convnext_atrous(pretrained=True, hf_token=hf_token)
-        # then load `saved_model_path` weights into it if you have a
-        # fine-tuned checkpoint. Left as an explicit error so it fails loudly
-        # instead of silently mis-loading, until this is wired up.
         raise NotImplementedError(
             "atrous_convnext_cell: no AtrousConvNeXtCell class exists yet. "
             "See models/convnext_pannuke.py:load_dinov3_convnext_atrous for the "
@@ -172,6 +195,35 @@ def get_models(modelname, saved_model_path=None, hf_token=None, cellvitpp_input_
         model = get_microformer_finetuned(saved_model_path, modelname)
     elif name in ["dinov3_vits16", "dinov3_vitb16", "dinov3_vitl16", "dinov3_vitg16"]:
         model = get_dinov3_finetuned_downloaded(saved_model_path, modelname)
+    elif name in ["vit5_small", "vit5_base", "vit5_large"]:
+        # ViT-5 DINO/iBOT teacher backbone. Returns an eval-mode wrapper
+        # (ViT5FeatureExtractor) whose forward(x) already returns the
+        # pooled CLS-token feature -- unlike the branches above, this is
+        # NOT a bare backbone, so downstream code that expects
+        # .pooler_output / tuple outputs will just get a plain tensor,
+        # which feature_extraction_vit5.py already handles.
+        if load_vit5_teacher_for_eval is None:
+            raise ImportError(
+                "vit5_dino_wrapper.load_vit5_teacher_for_eval could not be "
+                "imported -- check that vit5_dino_wrapper.py is on sys.path."
+            )
+        if saved_model_path is None:
+            raise ValueError(
+                "--checkpoint is required for vit5_* models -- pass the path "
+                "to your fine-tuned DINO/iBOT teacher checkpoint, not the "
+                "ImageNet-pretrained weights."
+            )
+        model = load_vit5_teacher_for_eval(
+            saved_model_path,
+            modelname=name,
+            patch_size=vit5_patch_size,
+        )
+        # load_vit5_teacher_for_eval already returns an eval()-mode wrapper;
+        # skip the generic model.to(device); model.eval() below since the
+        # wrapper's internal backbone handles device placement the same way.
+        model = model.to(device)
+        model.eval()
+        return model
     else:
         raise ValueError(f"Model {modelname} not found")
 
@@ -631,7 +683,8 @@ def get_full_res50():
 # ----------------------------------------------------------------------------
 # Transforms -- union of both files' branches
 # ----------------------------------------------------------------------------
-def get_transforms(model_name, cellvitpp_input_size=1024, hovernext_input_size=64):
+def get_transforms(model_name, cellvitpp_input_size=1024, hovernext_input_size=64,
+                    vit5_crop_size=224, vit5_patch_size=16):
     """
     Get appropriate image transforms for each model.
 
@@ -644,6 +697,11 @@ def get_transforms(model_name, cellvitpp_input_size=1024, hovernext_input_size=6
     encoder. Unlike cellvitpp, there's no architectural constraint forcing
     a specific value -- default 64 assumes you're running at your actual
     crop resolution with no upsampling.
+
+    vit5_crop_size / vit5_patch_size: for vit5_* models only. crop_size
+    must be a multiple of patch_size (raises ValueError otherwise) and
+    patch_size must match get_models(..., vit5_patch_size=...) for the
+    same checkpoint -- see that docstring.
     """
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
@@ -688,13 +746,34 @@ def get_transforms(model_name, cellvitpp_input_size=1024, hovernext_input_size=6
         size = 224
         mean = (0.48145466, 0.4578275, 0.40821073)
         std = (0.26862954, 0.26130258, 0.27577711)
+    elif name in ["vit5_small", "vit5_base", "vit5_large"]:
+        # crop resolution fed to the ViT-5 backbone at inference time --
+        # should match (or be close to) global_crops_size used during SSL
+        # training for the pos-embed interpolation to be in-distribution.
+        # Must be a multiple of vit5_patch_size (the checkpoint's actual
+        # patch size), not a hardcoded 16 -- see get_models() docstring.
+        if vit5_crop_size % vit5_patch_size != 0:
+            raise ValueError(
+                f"vit5_crop_size must be a multiple of vit5_patch_size "
+                f"({vit5_patch_size}), got crop_size={vit5_crop_size}"
+            )
+        size = vit5_crop_size
     elif name in [
         "dinov2_vits14", "dinov2_ssl", "dinov3_vits16", "dinov2_vitb14",
         "dinov2_vitl14", "dinov2_vitg14", "dinov2_finetuned",
         "dinov2_vits14_interpolated", "dinov2_finetuned_downloaded",
         "remedis", "vim_finetuned", "virchow", "uni2", "h0_mini",
-        "celldino", "distilled_vit_small", "histoplus",
+        "celldino", "distilled_vit_small", "histoplus", "cytoformer",
     ]:
+        # cytoformer: encoder is ViT-giant/14 initialised from UNI2-h and
+        # fine-tuned on 224x224 crops covering a 56 um FOV around the
+        # nucleus, with plain ImageNet normalization -- same recipe as
+        # the other 224px/ImageNet-stats models in this list. NOTE: the
+        # 56 um field-of-view resampling (mpp-aware cropping) itself is
+        # NOT done here -- do that upstream in your dataset/patch
+        # extraction code (mirroring CytoFormer's own
+        # scripts/crop_cells.py --mpp/--fov_um), then this transform just
+        # resizes+normalizes the resulting patch to 224x224 like usual.
         size = 224
     else:
         raise ValueError(f"Model name '{model_name}' not found")

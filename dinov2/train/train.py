@@ -1094,11 +1094,11 @@ def do_train(cfg, model, resume=False):
     root_dir="/tia/lab-share/esha/MIDOG/Classification/Final",
     transform=data_transform,
     dataset_name="MIDOG")
-    dataset8 = Balanced_TCGACellCropDataset(transform=data_transform)
-    dataset9 = Balanced_TCGACellCropDataset1(transform=data_transform)
-    dataset10 = Balanced_TCGACellCropDataset2(transform=data_transform)
+    # dataset8 = Balanced_TCGACellCropDataset(transform=data_transform)
+    # dataset9 = Balanced_TCGACellCropDataset1(transform=data_transform)
+    # dataset10 = Balanced_TCGACellCropDataset2(transform=data_transform)
     dataset11 = Balanced_TCGACellCropDataset3(transform=data_transform)
-    dataset =  torch.utils.data.ConcatDataset([dataset1, dataset2, dataset3, dataset5,dataset6, dataset7, dataset8,dataset9, dataset10, dataset11])
+    dataset =  torch.utils.data.ConcatDataset([dataset1, dataset2, dataset3, dataset5,dataset6, dataset7, dataset11])
     # Print dataset sizes
     print("\n=== Dataset sizes before training ===")
     print(f"ImmunoctoHE: {len(dataset1)} samples")
@@ -1107,12 +1107,12 @@ def do_train(cfg, model, resume=False):
     print(f"PUMA:   {len(dataset5)} samples")
     print(f"MONKEY:   {len(dataset6)} samples")
     print(f"MIDOG:   {len(dataset7)} samples")
-    print(f"TCGA:   {len(dataset8)} samples")
-    print(f"TCGA1:   {len(dataset9)} samples")
-    print(f"TCGA2:   {len(dataset10)} samples")
+    # print(f"TCGA:   {len(dataset8)} samples")
+    # print(f"TCGA1:   {len(dataset9)} samples")
+    # print(f"TCGA2:   {len(dataset10)} samples")
     print(f"TCGA3:   {len(dataset11)} samples")
     # + len(dataset4)
-    total_samples = len(dataset1) + len(dataset2) + len(dataset3)  + len(dataset5) +len(dataset6) + len(dataset7)+len(dataset8)+len(dataset9)+len(dataset10)+len(dataset11)
+    total_samples = len(dataset1) + len(dataset2) + len(dataset3)  + len(dataset5) +len(dataset6) + len(dataset7)+len(dataset11)
     print(f"TOTAL samples: {total_samples}\n")
     sampler_type = SamplerType.DISTRIBUTED
     data_loader = make_data_loader(
@@ -1273,7 +1273,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser(add_help=True).parse_args()
-    name = "dino_p4_vit5"  # updated: ViT-5-Small backbone, 96/48 crops (patch16)
+    name = "dinov2_p4_vit5"  # updated: ViT-5-Small backbone, 96/48 crops (patch16)
     args.output_dir = os.path.join(args.output_dir, name)
     wandb.init(
     entity="eshasadia2015-university-of-warwick",  # your own account

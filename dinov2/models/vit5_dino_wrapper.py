@@ -265,7 +265,7 @@ class ViT5FeatureExtractor(nn.Module):
 def load_vit5_teacher_for_eval(
     checkpoint_path,
     modelname="vit5_small",
-    patch_size=16,
+    patch_size=4,
 ):
     """
     NOTE: `patch_size` must match whatever the checkpoint at

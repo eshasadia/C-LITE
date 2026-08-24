@@ -332,6 +332,7 @@ def rankstr():
 
 
 class FSDPCheckpointer(Checkpointer):
+    
     def save(self, name: str, **kwargs: Any) -> None:
         """
         Dump model and checkpointables to a file.

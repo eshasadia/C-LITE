@@ -36,6 +36,12 @@ parser.add_argument(
 # celldino, vit_small_patch7, dinov2_p4
 # dinov3_vits16, dinov3_convnext, virchow2, cellvitpp, atrous_convnext_cell
 # hovernext, histoplus (gated HF model, academic use only -- see HistoPLUS docstring)
+# cytoformer (github.com/zhihuanglab/CytoFormer -- ViT-giant/14 cell foundation
+# model init'd from UNI2-h, fine-tuned on 15.4M Xenium-derived cell labels across
+# 16 organs; used here as a generic feature extractor via extract_features(), not
+# via its per-organ classification heads. Requires --checkpoint pointing at
+# checkpoint.pth from huggingface.co/zhihuanglab/CytoFormer, with
+# organ_celltype_map.json alongside it -- see models/cytoformer.py docstring.)
 #
 # dinov2_p4: the ImmunoDINO continued-pretraining checkpoint from
 # train_v1_balancedsmapling.py (dinov2_vits14 base, patch_embed PI-resized
@@ -796,6 +802,22 @@ def main(args):
             "nucls": "_atrousconvnext_nucls",
         }
         folder_name += dataset_suffixes.get(args.dataset, "_atrousconvnext_finetuned")
+
+    # Same idea for cytoformer checkpoints -- readable dataset-suffixed
+    # folder names instead of just the bare model name, mirroring the
+    # dinov2_* / atrous_convnext_cell cases above.
+    if args.model_name.lower() == "cytoformer" and args.checkpoint is not None:
+        dataset_suffixes = {
+            "immunocto": "_cytoformer_immunocto",
+            "conic": "_cytoformer_conic",
+            "pannuke": "_cytoformer_pannuke",
+            "pathocellbench": "_cytoformer_pathocellbench",
+            "preextracted": "_cytoformer_preextracted",
+            "midog": "_cytoformer_midog",
+            "hest": "_cytoformer_hest",
+            "nucls": "_cytoformer_nucls",
+        }
+        folder_name += dataset_suffixes.get(args.dataset, "_cytoformer_finetuned")
 
     if args.checkpoint is not None:
         folder_name = f"{folder_name}_{Path(args.checkpoint).parent.name}_{Path(args.checkpoint).stem}"

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=immundino
 #SBATCH --time=48:00:00
-#SBATCH --partition=tia-a100
-#SBATCH --gres=gpu:2
+#SBATCH --partition=tia-l4
+#SBATCH --gres=gpu:1
 #SBATCH --output=/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/out/%j.out
 #SBATCH --error=/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/bash/out/%j.err
 #SBATCH --cpus-per-task=16
@@ -22,13 +22,13 @@ module purge
 # export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export PYTHONPATH=/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning
 
-python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__); import torch; print(torch.cuda.is_available())"
-torchrun \
-  --nproc_per_node=2 \
-  --master_port=29502 \
- /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train.py \
-  --config-file /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/configs/train/custom.yaml \
-  --output-dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4_vit5 \
+# python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__); import torch; print(torch.cuda.is_available())"
+# torchrun \
+#   --nproc_per_node=2 \
+#   --master_port=29502 \
+#  /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/train/train.py \
+#   --config-file /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/configs/train/custom.yaml \
+#   --output-dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dinov2_p4_vit5 \
 
 
 # ------visualization of attention maps
@@ -39,13 +39,13 @@ torchrun \
 
 
 # -------feature extraction------
-# python /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/feature_extraction.py \
-#     --model_name dinov2_p4 \
-#     --save_dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/ \
-#     --dataset pannuke \
-#     --num_workers 4 \
-#     --batch_size 64 \
-#     --checkpoint /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dino_p4/dinov2_p4/eval/training_10999/teacher_checkpoint.pth \
+python -u /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/feature_extraction_vit5.py \
+    --model_name vit5_small \
+    --save_dir /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/old/vit5_p4 \
+    --dataset pannuke \
+    --batch_size 32 \
+    --vit5_patch_size 4 \
+    --checkpoint /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/dinov2_p4_vit5/dinov2_p4_vit5/eval/training_70999/teacher_checkpoint.pth
     # --cellvitpp_input_size 128 \
 
 
@@ -59,4 +59,4 @@ torchrun \
 
 # ------linear probe evaluation dinov2 based
 # python /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/eval/eval.py \
-#     --path_folder /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/results/old/pannuke/dinov2_p4_immunodino_pannuke_training_23999_teacher_checkpoint \
+#     --path_folder /tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/imunocto_eval/old/vit5_p4/pannuke/vit5_small_training_61999_teacher_checkpoint \

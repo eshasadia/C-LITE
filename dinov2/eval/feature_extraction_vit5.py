@@ -26,13 +26,8 @@ from eval_datasets import (
     NuCLSDataset
 )
 torch.cuda.empty_cache()
-# --- ViT-5 integration -------------------------------------------------
-# Same location as referenced in ssl_meta_arch.py -- adjust if you place
-# vit5_arch.py / vit5_dino_wrapper.py somewhere else.
-sys.path.append("/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/DinoBloom/dinov2/train")  # <-- adjust to your actual path
+sys.path.append("/tia/phd-data/u5552013/ImmunoDINO_baselines_comparison/cell_representation_learning/dinov2/models")  # <-- adjust to your actual path
 from vit5_dino_wrapper import load_vit5_teacher_for_eval
-# -------------------------------------------------------------------------
-
 parser = argparse.ArgumentParser(description="Unified feature extraction for multiple datasets")
 
 parser.add_argument(
@@ -41,13 +36,6 @@ parser.add_argument(
     type=str,
     required=True,
 )
-# Supported models:
-# ctranspath, resnet50, resnet50_full, owkin
-# dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
-# celldino, dinov3_vits16, virchow2
-# vit5_small, vit5_base, vit5_large  (requires --checkpoint: your fine-tuned
-#   DINO/iBOT teacher checkpoint, i.e. the file saved by do_test() in
-#   train_ddp_custom.py -- NOT the ImageNet-pretrained weights)
 
 parser.add_argument(
     "--dataset",
@@ -147,28 +135,33 @@ parser.add_argument(
     help="Resize resolution fed to the ViT-5 backbone at inference time. "
          "Should match (or be close to) global_crops_size used during SSL "
          "training (96 in the default custom.yaml) for the pos-embed "
-         "interpolation to be in-distribution. Must be a multiple of 16.",
+         "interpolation to be in-distribution. Must be a multiple of "
+         "--vit5_patch_size.",
     type=int,
     default=224,
 )
+parser.add_argument(
+    "--vit5_patch_size",
+    help="Patch size the ViT-5 checkpoint was ACTUALLY trained with -- this "
+         "must match the checkpoint exactly (e.g. 4 for a dino_p4_vit5 run, "
+         "16 for the default/native release checkpoints). The backbone is "
+         "always built at the native patch_size=16 first and then PI-resized "
+         "to this value before loading the checkpoint, so getting this wrong "
+         "will NOT raise an error -- patch_embed.proj / pos_embed will just "
+         "silently show up in 'missing keys' and you'll be evaluating a "
+         "partially randomly initialized backbone. Always check the printed "
+         "'[ViT-5 eval] missing keys (...)' line after loading.",
+    type=int,
+    default=16,
+)
 
 
-def get_vit5_transform(crop_size=224):
-    """
-    Standalone transform for the ViT-5 feature extractor, since
-    models/return_model.py's get_transforms() doesn't know about this
-    architecture yet.
-
-    NOTE: normalization stats are assumed to be standard ImageNet mean/std,
-    matching what dinov2's augmentations.py (and by extension
-    DataAugmentationHEMA, which is based on it) uses. If your HEMA transform
-    pipeline uses different stats (e.g. dataset-specific stain-normalized
-    stats), update these to match what the model was actually trained with
-    -- a mismatch here will silently degrade feature quality rather than
-    error out.
-    """
-    if crop_size % 16 != 0:
-        raise ValueError(f"--vit5_crop_size must be a multiple of 16 (patch_size), got {crop_size}")
+def get_vit5_transform(crop_size=224, patch_size=16):
+    if crop_size % patch_size != 0:
+        raise ValueError(
+            f"--vit5_crop_size must be a multiple of --vit5_patch_size "
+            f"({patch_size}), got crop_size={crop_size}"
+        )
     IMAGENET_MEAN = (0.485, 0.456, 0.406)
     IMAGENET_STD = (0.229, 0.224, 0.225)
     return transforms.Compose([
@@ -177,26 +170,7 @@ def get_vit5_transform(crop_size=224):
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
 
-
-# ============================================================================
-# Skip-missing-files-at-runtime support
-# ============================================================================
 class SkipMissingDataset(Dataset):
-    """
-    Wraps a dataset so that a missing/unreadable file at __getitem__ time
-    is skipped (returns None) instead of crashing the whole run.
-
-    Used in place of the old immunocto upfront filter_missing_files() pass,
-    which did a synchronous os.path.exists() check per row over
-    potentially millions of rows on a networked filesystem before training
-    even started -- extremely slow. Instead we just try to load the item;
-    if the underlying file isn't there, we skip it right then, at
-    essentially zero extra cost (the load attempt was going to happen
-    anyway).
-
-    Pairs with `collate_skip_none` below, which drops the None entries
-    out of the batch before default_collate runs.
-    """
     def __init__(self, dataset):
         self.dataset = dataset
         # preserve attributes like .classes that calling code looks up
@@ -289,11 +263,6 @@ def save_features_combined(feature_extractor, dataloader, save_dir, split_name, 
     return all_features.shape
 
 def save_features_hest(feature_extractor, dataloader, save_dir, split_name):
-    """
-    Like save_features_combined but the 'label' slot holds a float32
-    gene expression vector (N, n_genes) instead of an integer class label.
-    Everything else is identical to save_features_combined.
-    """
     os.makedirs(save_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -414,15 +383,6 @@ def setup_immunocto_datasets(args, transform):
     train_df = train_val_df[train_val_df["patient"].isin(train_patients)]
     val_df = train_val_df[train_val_df["patient"].isin(val_patients)]
 
-    # NOTE: no upfront filter_missing_files() pass anymore -- that did a
-    # synchronous os.path.exists() check per row (potentially millions of
-    # rows) on a networked filesystem before training even started, which
-    # was the main source of slowness for this dataset. Missing files are
-    # now skipped at runtime instead: ImmunoctoFeatureDataset is wrapped in
-    # SkipMissingDataset, which catches a missing/unreadable file at
-    # __getitem__ time and returns None; collate_skip_none then drops
-    # those Nones out of the batch. See the DataLoader construction in
-    # main() for the required collate_fn=collate_skip_none.
     print(f"Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)} "
           f"(unfiltered -- missing files, if any, are skipped at runtime)")
     
@@ -567,17 +527,6 @@ def compute_top50_genes(adata_paths):
     return top50
 
 def setup_hest_datasets(args, transform):
-    """
-    Setup HEST dataset using pre-extracted patches (no WSI needed).
-    Reads from patches/{id}.h5 and st/{id}.h5ad directly.
-
-    --hest_sample_ids  comma-separated sample IDs
-    --hest_fold        index into sample_ids to hold out as test (default 0)
-    --data_dir         path to HEST tissue folder, e.g. HEST/breast/
-                       must contain patches/ and st/ subfolders
-
-    Train/val split: 90/10 of non-test slides, seeded with args.seed.
-    """
     import scanpy as sc
 
     if args.data_dir is None:
@@ -755,7 +704,7 @@ def main(args):
 
     # Get transform
     if is_vit5:
-        transform = get_vit5_transform(args.vit5_crop_size)
+        transform = get_vit5_transform(args.vit5_crop_size, args.vit5_patch_size)
     else:
         transform = get_transforms(args.model_name)
     
@@ -780,10 +729,6 @@ def main(args):
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
-    # collate_skip_none only matters (drops Nones) for datasets wrapped in
-    # SkipMissingDataset -- currently just immunocto. It's a harmless
-    # passthrough (equivalent to default_collate) for every other dataset,
-    # so it's safe to use unconditionally here.
     collate_fn = collate_skip_none
 
     # Create dataloaders
@@ -824,11 +769,15 @@ def main(args):
                 "do_test() in train_ddp_custom.py), not the ImageNet-pretrained "
                 "weights (those are loaded automatically during SSL training only)."
             )
-        feature_extractor = load_vit5_teacher_for_eval(args.checkpoint, modelname=args.model_name)
+        print(f"Using ViT-5 patch size: {args.vit5_patch_size} "
+              f"(must match how this checkpoint was trained)")
+        feature_extractor = load_vit5_teacher_for_eval(
+            args.checkpoint,
+            modelname=args.model_name,
+            patch_size=args.vit5_patch_size,
+        )
     else:
         feature_extractor = get_models(args.model_name, saved_model_path=args.checkpoint)
-    # feature_extractor = torch.compile(feature_extractor, mode="max-autotune")
-    # Create save directories
     folder_name = args.model_name
     
     # Add dataset-specific suffix if using checkpoint with dinov2
@@ -889,3 +838,4 @@ def main(args):
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    main(args)
