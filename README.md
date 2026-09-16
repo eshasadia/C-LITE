@@ -1,3 +1,3 @@
-# <img src="clite_logo.png" width="30" height="30"> C-LITE — A Cell-Level Representation Learning Model
+# <img src="clite_logo.png" width="40" valign="middle"> C-LITE — A Cell-Level Representation Learning Model
 
-<img width="612" height="136" alt="C-LITE overview" src="clite_logo.png" />
+<img src="clite_logo.png" alt="C-LITE — A Cell-Level Representation Learning Model" width="612">
