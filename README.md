@@ -22,7 +22,7 @@ Metrics reported: Accuracy, Balanced Accuracy, Macro/Weighted F1, Macro Precisio
 
 ## Quick Start: PanNuke Nucleus Classification
 
-The notebook is self-contained. The ViT-5 architecture is defined inline, so it needs no `timm`, `einops`, `flash-attn` or `xformers`. The data is downloaded directly from the Hugging Face Hub.
+The notebook is self-contained. The data is downloaded directly from the Hugging Face Hub.
 
 ```bash
 pip install torch torchvision datasets numpy pillow scikit-learn matplotlib tqdm
