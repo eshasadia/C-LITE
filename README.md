@@ -9,4 +9,11 @@ Downstream Tasks:
 - Mitosis Classification
 - Nucleus Classification
 - Hierarchical Subtype Classification
+
+Feature Extraction
+
+PCA Visualization
+
+TSNE/UMAP PLOTs
+
   
