@@ -1,5 +1,7 @@
 # <img src="clite_logo.png" width="40" valign="middle"> C-LITE — A Cell-Level Representation Learning Model
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<GITHUB_USER>/<REPO>/blob/main/vit5_p4_pannuke_hf_classification.ipynb)
+
 <img src="clite_logo.png" alt="C-LITE — A Cell-Level Representation Learning Model" width="312">
 
 C-LITE learns representations of individual cells from H&E histology. The backbone is a **ViT-5** vision transformer (`DinoViT5`) trained with DINO-style self-supervision at **patch size 4** on **64×64 cell-centred crops**. Each crop becomes a 16×16 grid of patch tokens, plus a CLS token and 4 register tokens.
@@ -22,12 +24,25 @@ Metrics reported: Accuracy, Balanced Accuracy, Macro/Weighted F1, Macro Precisio
 
 ## Quick Start: PanNuke Nucleus Classification
 
-The notebook is self-contained. The data is downloaded directly from the Hugging Face Hub.
+The notebook is self-contained. The ViT-5 architecture is defined inline, so it needs no `timm`, `einops`, `flash-attn` or `xformers`. The data is downloaded directly from the Hugging Face Hub.
 
 ```bash
 pip install torch torchvision datasets numpy pillow scikit-learn matplotlib tqdm
 jupyter lab vit5_p4_pannuke_hf_classification.ipynb
 ```
+
+### Run on Google Colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<GITHUB_USER>/<REPO>/blob/main/vit5_p4_pannuke_hf_classification.ipynb)
+
+1. Click the badge. For a private repo, Colab asks you to authorise GitHub; you can also use *File → Open notebook → GitHub* with "Include private repos" ticked.
+2. Switch to a GPU: *Runtime → Change runtime type → T4 GPU*.
+3. Put the checkpoint in Google Drive at `MyDrive/C-LITE/teacher_checkpoint.pth`. If it isn't there, the notebook shows an upload box.
+4. *Runtime → Run all*. Cell §0 installs `datasets` and mounts Drive. PanNuke downloads from Hugging Face and the cell crops are cut on the Colab disk (`/content`). Features, metrics and figures are saved to `MyDrive/C-LITE/<MODEL_TAG>_pannuke_results/`, so they survive the session.
+
+The first run spends most of its time downloading PanNuke (~1.7 GB) and writing ~190k crops. Crops on `/content` are lost when the runtime resets, but features cached in Drive are reused.
+
+### Configuration
 
 Edit the configuration cell (§1) before running:
 
@@ -154,4 +169,3 @@ Fold 3 has roughly 60k+ nuclei, and t-SNE on all of them is slow. For a quick lo
 ## Acknowledgements
 
 PanNuke dataset: Gamper *et al.*, *PanNuke: an open pan-cancer histology dataset for nuclei instance segmentation and classification* (ECDP 2019) and *PanNuke Dataset Extension, Insights and Baselines* (arXiv:2003.10778). The Hugging Face release is by RationAI, licensed CC BY-NC-SA 4.0.
-  
