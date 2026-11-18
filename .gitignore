@@ -13,18 +13,10 @@ slurm_outputs/
 .vscode/
 *.out
 **/wandb/**
-dinov2/configs/train/custom.yaml
-dinov2/eval/miccai/test_checkpoints.sh
-.logs/*
 debug*
 *.yaml
 vits**
 vitb**
 vitg**
 vitl**
-__MACOSX/blood_sampels/*
-dinov2/data/blood_sampels/*
-dinov2/data/acevedo samples/*
-figures/**
-*.jpg
-*.jpeg
+

@@ -10,13 +10,9 @@ from typing import List, Tuple
 from setuptools import setup, find_packages
 
 
-NAME = "dinov2"
-DESCRIPTION = "PyTorch code and models for the DINOv2 self-supervised learning method."
+NAME = "clite"
+DESCRIPTION = "PyTorch code and models for the C-LiTE self-supervised learning method."
 
-URL = "https://github.com/facebookresearch/dinov2"
-AUTHOR = "FAIR"
-REQUIRES_PYTHON = ">=3.9.0"
-HERE = Path(__file__).parent
 
 
 try:

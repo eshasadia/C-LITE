@@ -5,14 +5,7 @@ from timm.models.layers import trunc_normal_
 from vit5_arch import vit_models, RMSNorm, Block  # see vit5_arch.py
 from functools import partial
 
-# --- NEW: detect flash-attn availability once, at import time, instead of
-# assuming it's installed. `vit5_arch.py`'s Attention/Block classes should
-# themselves also guard their flash_attn_qkvpacked_func call on whatever
-# `flash` flag they receive -- this only fixes the caller-side bug where
-# `flash=True` was hardcoded regardless of whether the package was actually
-# importable. If Attention.forward() unconditionally calls
-# flash_attn_qkvpacked_func without checking self.flash, this alone won't
-# be enough -- that call site also needs a guard (see note at bottom).
+
 try:
     import flash_attn  # noqa: F401
     _FLASH_ATTN_AVAILABLE = True
@@ -26,14 +19,7 @@ except ImportError:
     _XFORMERS_AVAILABLE = False
 
 if not _FLASH_ATTN_AVAILABLE:
-    # --- CHANGED: this used to unconditionally recommend installing
-    # flash-attn whenever it wasn't found, even though vit5_arch.py's
-    # Attention class will actually fall back to xFormers first (if
-    # available) before ever touching plain SDPA -- xFormers gives
-    # comparable performance to flash-attn and, unlike it, ships prebuilt
-    # wheels that don't need a local CUDA toolkit to install. The message
-    # now reflects what will actually happen, instead of always pointing
-    # at the harder-to-install option.
+
     if _XFORMERS_AVAILABLE:
         print(
             "[ViT-5] flash-attn is not installed/importable, but xFormers "
@@ -97,9 +83,7 @@ def _detect_vit5_gating(state_dict: dict, num_heads: int):
 class DinoViT5(vit_models):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Set explicitly rather than trusting vit_models to have stored it --
-        # _interpolate_pos_encoding below depends on this attribute existing,
-        # and we don't have visibility into whether the base class sets it.
+
         self.patch_size = kwargs.get("patch_size", getattr(self, "patch_size", 16))
         self.mask_token = nn.Parameter(torch.zeros(1, self.embed_dim))
         trunc_normal_(self.mask_token, std=0.02)
@@ -198,12 +182,6 @@ def _normalize_state_dict(sd, verbose=True):
     for key in ("model", "state_dict"):
         if isinstance(sd, dict) and key in sd and isinstance(sd[key], dict):
             sd = sd[key]
-    # KD training checkpoints (step/student/projector/optimizer/scheduler)
-    # save the trainable backbone under 'student', not 'teacher' -- e.g.
-    # uni2h_to_vit5_tcga_unsupervised checkpoints, where UNI2-h is the
-    # (unsaved, externally-loaded) teacher and ViT-5 is the student being
-    # trained. Prefer 'teacher' when present (eval convention for
-    # released/EMA weights), otherwise fall back to 'student'.
     if isinstance(sd, dict) and "teacher" in sd and isinstance(sd["teacher"], dict):
         sd = sd["teacher"]
     elif isinstance(sd, dict) and "student" in sd and isinstance(sd["student"], dict):
@@ -226,28 +204,7 @@ def _normalize_state_dict(sd, verbose=True):
 
     # already flat (e.g. the official release)
     return sd
-# def _normalize_state_dict(sd, verbose=True):
-#     # unwrap common single-key containers
-#     for key in ("model", "state_dict"):
-#         if isinstance(sd, dict) and key in sd and isinstance(sd[key], dict):
-#             sd = sd[key]
-#     if isinstance(sd, dict) and "teacher" in sd and isinstance(sd["teacher"], dict):
-#         sd = sd["teacher"]
 
-#     # strip branch / ModuleDict / FSDP prefixes, first match wins
-#     for pref in ("teacher.backbone.", "student.backbone.", "backbone.", "module."):
-#         hits = {
-#             k[len(pref):].replace("_fsdp_wrapped_module.", ""): v
-#             for k, v in sd.items()
-#             if k.startswith(pref)
-#         }
-#         if hits:
-#             if verbose:
-#                 print(f"[ViT-5] stripped prefix '{pref}' -> {len(hits)} tensors")
-#             return hits
-
-#     # already flat (e.g. the official release)
-#     return sd
 
 
 def _resize_patch_size_inplace(model, target_patch_size):
@@ -275,12 +232,6 @@ def _resize_patch_size_inplace(model, target_patch_size):
     if hasattr(model.patch_embed, "patch_size"):
         model.patch_embed.patch_size = (target_patch_size, target_patch_size)
     model.patch_size = target_patch_size
-
-    # pos_embed's *base* grid also needs to move to the new patch size's
-    # native resolution (_VIT5_NATIVE_IMG_SIZE // target_patch_size) --
-    # DinoViT5._interpolate_pos_encoding() only handles *runtime* crop-size
-    # changes away from this base; it has no idea the checkpoint's patch
-    # size itself just changed, so that base grid has to be fixed up here.
     old_grid = int(math.sqrt(model.pos_embed.shape[1]))
     new_grid = _VIT5_NATIVE_IMG_SIZE // target_patch_size
     pe = model.pos_embed.reshape(1, old_grid, old_grid, -1).permute(0, 3, 1, 2)
@@ -320,16 +271,6 @@ def get_vit5_backbone(modelname="vit5_small", img_size=224, patch_size=16,
             "own backend internally), so this will NOT crash -- but it "
             "will run slower than either fast path."
         )
-
-    # NOTE: the actual per-block backend choice (flash / xformers / sdpa)
-    # is now resolved inside vit5_arch.py's Attention class itself (see
-    # _select_attn_backend there), which is printed once at import time as
-    # "[vit5_arch] attention backend auto-selected: ...". The `flash` bool
-    # here only controls whether Attention is allowed to use a fast path
-    # at all (flash=False forces plain SDPA regardless of what's
-    # installed) -- it is NOT itself the name of the backend that gets
-    # used, so we no longer print a separate (and easily stale-looking)
-    # "attention backend: eager/SDPA"-style message here.
     print(f"[ViT-5] fast attention path requested: {flash} "
           f"(flash-attn available: {_FLASH_ATTN_AVAILABLE}, "
           f"xformers available: {_XFORMERS_AVAILABLE})")
@@ -339,9 +280,6 @@ def get_vit5_backbone(modelname="vit5_small", img_size=224, patch_size=16,
               f"(pos_embed grid) even though crops are {img_size}px; resolution is "
               f"reconciled per-forward-pass via bicubic pos-embed interpolation.")
 
-    # Always construct at the checkpoint's native patch size so the raw
-    # state_dict loads with no shape mismatch, then PI-resize afterward if
-    # the caller wants a different patch_size (see _resize_patch_size_inplace).
     model = DinoViT5(
         img_size=_VIT5_NATIVE_IMG_SIZE,
         patch_size=_VIT5_NATIVE_PATCH_SIZE,
@@ -395,21 +333,7 @@ except ImportError:
 
 
 class ViT5FeatureExtractor(nn.Module):
-    """
-    Thin eval-mode wrapper: forward(x) -> pooled (B, embed_dim) CLS-token
-    feature, matching what extract_features_unified.py expects (a plain
-    tensor, or something with no .pooler_output/tuple wrapping).
-
-    force_sdpa_backend: when flash-attn isn't installed, Attention.forward
-        falls back to F.scaled_dot_product_attention, which auto-selects a
-        kernel (flash / memory-efficient / math) based on input shapes and
-        dtype. That auto-selection can silently pick the slow `math`
-        kernel if the fast kernels don't support the current shapes/dtype
-        -- there's no error, just worse performance. Setting this True
-        forces PyTorch to only consider the fast kernels and raise a clear
-        RuntimeError if neither is usable, so a silent slow fallback can't
-        hide. Set to False to let PyTorch auto-select (default behavior).
-    """
+   
     def __init__(self, backbone, force_sdpa_backend=True):
         super().__init__()
         self.backbone = backbone
@@ -429,21 +353,7 @@ class ViT5FeatureExtractor(nn.Module):
 
 
 def compile_vit5_feature_extractor(feature_extractor, mode="reduce-overhead"):
-    """
-    Wraps feature_extractor.backbone in torch.compile for reduced per-call
-    Python/kernel-launch overhead across the model's sequential blocks.
-
-    IMPORTANT: only call this if your DataLoader uses drop_last=True (or
-    your dataset size happens to divide evenly by batch_size). torch.compile
-    specializes on input shapes by default -- a differently-shaped final
-    partial batch will trigger a recompilation, costing you the time this
-    was supposed to save. First batch after compiling will also be slow
-    (compilation itself); this is expected and only happens once.
-
-    Call this AFTER load_vit5_teacher_for_eval(), e.g.:
-        feature_extractor = load_vit5_teacher_for_eval(...)
-        feature_extractor = compile_vit5_feature_extractor(feature_extractor)
-    """
+    
     feature_extractor.backbone = torch.compile(feature_extractor.backbone, mode=mode)
     return feature_extractor
 
@@ -455,19 +365,7 @@ def load_vit5_teacher_for_eval(
     flash=None,
     force_sdpa_backend=True,
 ):
-    """
-    NOTE: `patch_size` must match whatever the checkpoint at
-    `checkpoint_path` was actually trained with -- this rebuilds the
-    backbone at that patch size (via the same native-then-PI-resize path
-    as get_vit5_backbone) *before* loading, so the checkpoint's tensor
-    shapes line up. Passing the wrong patch_size here will silently drop
-    patch_embed.proj / pos_embed into "missing keys" (shape mismatch,
-    strict=False) and you'll be evaluating a partially randomly
-    initialized backbone with no error raised.
-
-    flash: see get_vit5_backbone -- defaults to None (auto-detect based on
-    whether flash-attn is importable in the current environment).
-    """
+    
     model, embed_dim = get_vit5_backbone(
         modelname,
         patch_size=patch_size,
