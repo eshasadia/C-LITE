@@ -104,7 +104,7 @@ Linear-probe macro-F1 with frozen features. Results are the mean over five-fold 
 | **Average** | 0.670 | 0.675 | 0.655 | **0.682** | 0.646 | 0.628 |
 
 <p align="center">
-  <img src="assets/c-lite_performance_vs_params.png" alt="Average macro-F1 vs parameters" width="75%">
+  <img src="assets/param_count.png" alt="Average macro-F1 vs parameters" width="75%">
 </p>
 
 ### Efficiency
