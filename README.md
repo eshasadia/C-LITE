@@ -1,4 +1,4 @@
-# <img src="clite_logo.png" width="40" valign="middle"> C-LITE — A Lightweight Foundation Model for Cellular feature learning in Histopathology
+# <img src="clite_logo.png" width="40" valign="middle"> C-LITE: A Lightweight Foundation Model for Cellular feature learning in Histopathology
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<GITHUB_USER>/<REPO>/blob/main/vit5_p4_pannuke_hf_classification.ipynb)
 
