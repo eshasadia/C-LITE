@@ -42,7 +42,7 @@ C-LiTE is a **22M-parameter** self-supervised model built specifically for singl
 - **Efficient:** it comes within 0.012 average macro-F1 of CytoFormer (681M parameters), with **30× fewer parameters**, **16× fewer FLOPs** and **21× higher throughput**. It embeds **1M cells in about 16 minutes** on a single A100.
 
 <p align="center">
-  <img src="assets/c-lite_architecture.png" alt="C-LiTE architecture" width="85%">
+  <img src="assets/clite_main.pdf" alt="C-LiTE architecture" width="85%">
 </p>
 
 *(A) PI-PatchEmbed adapts the pre-trained patch projection from 16 × 16 to 4 × 4. (B) The ViT-5 encoder with register tokens. (C) DINOv2-style teacher–student self-distillation (DINO + iBOT).*
