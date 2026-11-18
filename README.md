@@ -15,10 +15,6 @@ C-LITE learns representations of individual cells from H&E histology.
 - Nucleus Classification 
 - Hierarchical Subtype Classification
 
-All tasks use the same protocol. The backbone is frozen, features are extracted once, and a **logistic-regression linear probe** (`C = 1/l2`, `l2 = 100 / (M·C)`, lbfgs) and a **cosine kNN** classifier are trained on top.
-
-Metrics reported: Accuracy, Balanced Accuracy, Macro/Weighted F1, Macro Precision/Recall, Cohen's κ, macro AUROC, mAP, Log-loss, and per-class F1.
-
 
 ## Quick Start: 
 
