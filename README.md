@@ -80,7 +80,6 @@ Or open it directly in Google Colab with the badge at the top of this page.
 
 - RGB H&E crop of **64 × 64 px**, centred on a nucleus
 - Pre-training resolution of **~0.5 µm/px (20×)**
-- **Do not resize** crops to 224 × 224 px
 
 ### Using C-LiTE on your own slides
 
@@ -88,30 +87,11 @@ Or open it directly in Google Colab with the badge at the top of this page.
 2. Pass the crops through C-LiTE in batches and use the class-token embedding (384-d) for each cell.
 3. Train a linear classifier, or cluster the embeddings for label-free phenotyping.
 
-## Results
-
-Linear-probe macro-F1 with frozen features. Results are the mean over five-fold cross-validation, except PanNuke (three official folds) and Immunocto (official split).
-
-| Benchmark | C-LiTE | C-LiTE\*U | C-LiTE\*V | CytoFormer (681M) | UNI2 (681M) | Virchow2 (632M) |
-|---|---|---|---|---|---|---|
-| MIDOG 2025 (mitosis) | **0.790** | 0.775 | 0.786 | 0.757 | 0.726 | 0.729 |
-| NuCLS (super) | 0.590 | **0.613** | 0.559 | 0.598 | 0.602 | 0.600 |
-| PanNuke | 0.713 | **0.743** | 0.723 | 0.715 | 0.715 | 0.711 |
-| CoNIC | 0.718 | 0.727 | 0.683 | **0.769** | 0.682 | 0.634 |
-| MONKEY (PAS) | 0.785 | 0.784 | 0.774 | **0.786** | 0.744 | 0.723 |
-| Immunocto | 0.557 | 0.567 | 0.569 | **0.574** | 0.510 | 0.461 |
-| PUMA | 0.540 | 0.557 | 0.492 | **0.575** | 0.543 | 0.539 |
-| **Average** | 0.670 | 0.675 | 0.655 | **0.682** | 0.646 | 0.628 |
-
-<p align="center">
-  <img src="assets/param_count.png" alt="Average macro-F1 vs parameters" width="75%">
-</p>
-
 ### Efficiency
 
 Measured on a single NVIDIA A100:
 
-| | C-LiTE | CytoFormer | |
+| | C-LiTE | UNI2/Virchow2/CytoFormer | |
 |---|---|---|---|
 | Parameters | 22.5M | 681.6M | **30× smaller** |
 | FLOPs / input | 11.1G | 180.4G | **16.2× fewer** |
@@ -131,17 +111,10 @@ BRCA, LUAD, LUSC, OV, COAD, READ, CESC, KIRC, KIRP, PAAD, LIHC, PRAD, UCEC, UCS,
 
 ```
 C-LiTE/
-├── clite_cell_feature_learning.ipynb   # self-contained demo notebook
-├── assets/                             # figures used in this README
-└── ...                                 # TODO: list training/eval folders
+├── notebooks/clite_cell_feature_learning.ipynb   
+├── assets/                             
+└── ...                                
 ```
-
-## Limitations
-
-- Evaluated with linear probing only; fine-tuning and detection or segmentation pipelines have not yet been tested.
-- Pre-trained on TCGA H&E at a single resolution (0.5 mpp). Behaviour on other stains and on IHC is untested.
-- Crop locations come from automatic HoVer-Net detections that were not manually checked.
-
 
 ## Acknowledgements
 
