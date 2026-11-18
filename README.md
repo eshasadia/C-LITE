@@ -84,10 +84,9 @@ Or open it directly in Google Colab with the badge at the top of this page.
 
 ### Using C-LiTE on your own slides
 
-1. Detect nuclei, for example with [HoVer-Net](https://github.com/vqdang/hover_net) at 0.5 mpp.
-2. Extract a 64 × 64 px crop centred on each nucleus centroid.
-3. Pass the crops through C-LiTE in batches and use the class-token embedding (384-d) for each cell.
-4. Train a linear classifier, or cluster the embeddings for label-free phenotyping.
+1. Extract a 64 × 64 px crop centred on each nucleus centroid.
+2. Pass the crops through C-LiTE in batches and use the class-token embedding (384-d) for each cell.
+3. Train a linear classifier, or cluster the embeddings for label-free phenotyping.
 
 ## Results
 
@@ -143,13 +142,10 @@ C-LiTE/
 - Pre-trained on TCGA H&E at a single resolution (0.5 mpp). Behaviour on other stains and on IHC is untested.
 - Crop locations come from automatic HoVer-Net detections that were not manually checked.
 
-## License
-
-TODO: add the license for the code and weights (for example Apache-2.0 for code; CC BY-NC-SA 4.0 for weights). Check the licences of TCGA and the UNI2/Virchow2 teacher models before deciding on the weights.
 
 ## Acknowledgements
 
-C-LiTE builds on [DINOv2](https://github.com/facebookresearch/dinov2), ViT-5, [FlexiViT](https://github.com/google-research/big_vision) (PI-resize), [HoVer-Net](https://github.com/vqdang/hover_net) and [TIAToolbox](https://github.com/tissueimageanalytics/tiatoolbox). We thank the TCGA Research Network and the organisers of the MIDOG 2025, NuCLS, PanNuke, CoNIC, MONKEY, Immunocto and PUMA datasets.
+C-LiTE builds on [DINOv2](https://github.com/facebookresearch/dinov2), ViT-5, [HoVer-Net](https://github.com/vqdang/hover_net) and [TIAToolbox](https://github.com/tissueimageanalytics/tiatoolbox). We thank the organisers of the MIDOG 2025, NuCLS, PanNuke, CoNIC, MONKEY, Immunocto and PUMA datasets.
 
 ## Citation
 
