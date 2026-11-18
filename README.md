@@ -2,7 +2,8 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<GITHUB_USER>/<REPO>/blob/main/vit5_p4_pannuke_hf_classification.ipynb)
 
-<img src="clite_logo.png" alt="C-LITE — A Cell-Level Representation Learning Model" width="312">
+<img src="clite_logo.png" alt="C-LITE — A Lightweight Foundation Model for Cellular
+feature learning in Histopathology" width="312">
 
 C-LITE learns representations of individual cells from H&E histology. 
 
