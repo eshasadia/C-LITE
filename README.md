@@ -5,7 +5,6 @@
 <img src="clite_logo.png" alt="C-LITE — A Cell-Level Representation Learning Model" width="312">
 
 C-LITE learns representations of individual cells from H&E histology. 
----
 
 ## Downstream Tasks
 
@@ -19,7 +18,6 @@ All tasks use the same protocol. The backbone is frozen, features are extracted 
 
 Metrics reported: Accuracy, Balanced Accuracy, Macro/Weighted F1, Macro Precision/Recall, Cohen's κ, macro AUROC, mAP, Log-loss, and per-class F1.
 
----
 
 ## Quick Start: PanNuke Nucleus Classification
 
