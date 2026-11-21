@@ -125,11 +125,14 @@ C-LiTE builds on [DINOv2](https://github.com/facebookresearch/dinov2), ViT-5, [H
 If you find C-LiTE useful, please cite:
 
 ```bibtex
-@article{nasir2026clite,
-  title   = {C-LiTE: A Lightweight Foundation Model for Cellular Feature Learning in Histopathology},
-  author  = {Nasir, Esha Sadia and Lv, Jiaqi and Gunesli, Gozde N. and Raza, Shan E Ahmed},
-  journal = {Under review},
-  year    = {2026}
+@misc{nasir2026clitelightweightfoundationmodel,
+      title={C-LiTE: A Lightweight Foundation Model for Cellular feature learning in Histopathology}, 
+      author={Esha Sadia Nasir and Jiaqi Lv and Gozde N. Gunesli and Shan E Ahmed Raza},
+      year={2026},
+      eprint={2611.26316},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2611.26316}, 
 }
 ```
 
