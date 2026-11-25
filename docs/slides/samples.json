@@ -1,0 +1,91 @@
+[
+  {
+    "id": "TCGA-BR-4267",
+    "name": "Stomach adenocarcinoma",
+    "subtitle": "TCGA-BR-4267 crop",
+    "width": 1600,
+    "height": 1200,
+    "mpp": 0.5,
+    "nuclei": 2288,
+    "layers": {
+      "pred": {
+        "label": "Cell types (provisional)",
+        "count": 2288,
+        "legend": [
+          {
+            "name": "Tumor",
+            "color": "#e8262b",
+            "n": 1127
+          },
+          {
+            "name": "Epithelium",
+            "color": "#ff9f0a",
+            "n": 0
+          },
+          {
+            "name": "Stroma",
+            "color": "#18b05a",
+            "n": 535
+          },
+          {
+            "name": "Endothelium",
+            "color": "#00a3d9",
+            "n": 98
+          },
+          {
+            "name": "Lymphocyte",
+            "color": "#2f6bff",
+            "n": 386
+          },
+          {
+            "name": "Plasma cell",
+            "color": "#8a4dff",
+            "n": 142
+          },
+          {
+            "name": "Macrophage",
+            "color": "#00c2b8",
+            "n": 0
+          }
+        ],
+        "note": "Provisional: C-LiTE features were split into 20 k-means clusters and each cluster was given a class by looking at sample cells (by Claude, not a pathologist). Every cell takes its cluster's label. Not a trained classifier, and not verified."
+      },
+      "clusters": {
+        "label": "Clusters",
+        "count": 2288,
+        "legend": [
+          {
+            "name": "1 \u00b7 tumour, large pale nuclei",
+            "color": "#e6194b",
+            "n": 487
+          },
+          {
+            "name": "2 \u00b7 stromal / mixed",
+            "color": "#3cb44b",
+            "n": 463
+          },
+          {
+            "name": "3 \u00b7 lymphocyte / plasma-like",
+            "color": "#ffe119",
+            "n": 442
+          },
+          {
+            "name": "4 \u00b7 tumour, crowded & elongated",
+            "color": "#4363d8",
+            "n": 381
+          },
+          {
+            "name": "5 \u00b7 loose stroma & lumen",
+            "color": "#f58231",
+            "n": 308
+          },
+          {
+            "name": "6 \u00b7 tumour, dense glands",
+            "color": "#911eb4",
+            "n": 207
+          }
+        ]
+      }
+    }
+  }
+]

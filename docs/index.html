@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-LiTE — cell-level predictions on whole slides</title>
+<meta name="description" content="Interactive viewer of C-LiTE cell-type predictions and label-free feature clusters on held-out H&E slides.">
+<script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.1/build/openseadragon/openseadragon.min.js"></script>
+<style>
+  :root{
+    --bg:#fbfaf8; --fg:#1b1a19; --muted:#6b6862; --line:#e6e2dc; --panel:#f3f0eb;
+    --accent:#7b2d8e; --accent-fg:#fff; --stage:#0f0f10;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141315; --fg:#ecebea; --muted:#a19d97; --line:#2b292d; --panel:#1b1a1d; --accent:#c48ad6; --accent-fg:#141315; }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;
+       font:14px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+
+  header{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+  header h1 span{color:var(--muted);font-weight:400}
+  header nav{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  header nav a{color:var(--fg);text-decoration:none;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px}
+  header nav a:hover{border-color:var(--accent);color:var(--accent)}
+
+  .wrap{flex:1;display:flex;min-height:0}
+  aside{width:268px;flex:none;border-right:1px solid var(--line);background:var(--panel);padding:16px;overflow-y:auto}
+  aside h2{margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  aside section{margin-bottom:22px}
+  .hint{color:var(--muted);margin:8px 0 0;font-size:12px}
+
+  ul.slides{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  ul.slides button{width:100%;text-align:left;cursor:pointer;padding:8px 10px;border-radius:8px;
+                   border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+  ul.slides small{display:block;color:var(--muted);font-size:12px}
+  ul.slides button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;cursor:pointer;font:inherit;font-size:13px;color:var(--fg);background:var(--bg);
+              border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+  .seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .seg button:disabled{opacity:.45;cursor:not-allowed}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .val{float:right;color:var(--muted);font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0}
+
+  ul.legend{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+  ul.legend li{display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none}
+  ul.legend li.off{opacity:.35}
+  ul.legend i{width:12px;height:12px;border-radius:3px}
+  ul.legend .n{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
+  ul.legend .bar{grid-column:2 / 4;height:3px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:-2px}
+  ul.legend .bar b{display:block;height:100%}
+
+  .stage{flex:1;min-width:0;display:flex;background:var(--stage)}
+  .pane{flex:1;min-width:0;position:relative}
+  .pane + .pane{border-left:1px solid #333}
+  .pane .osd{position:absolute;inset:0}
+  .tag{position:absolute;top:10px;left:10px;z-index:5;background:rgba(0,0,0,.62);color:#fff;
+       padding:3px 9px;border-radius:6px;font-size:12px;pointer-events:none}
+  .scale{position:absolute;left:10px;bottom:12px;z-index:5;color:#fff;font-size:11px;pointer-events:none;
+         text-shadow:0 0 3px #000}
+  .scale div{height:4px;border:1px solid #fff;border-top:none;margin-top:2px}
+  #paneRef{display:none}
+  .empty{color:#bbb;margin:auto;max-width:420px;text-align:center;padding:24px}
+  .empty code{color:#fff}
+
+  @media (max-width:760px){
+    .wrap{flex-direction:column}
+    aside{width:auto;border-right:none;border-bottom:1px solid var(--line);max-height:42vh}
+    .stage{min-height:58vh}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>C-LiTE <span>— cell-level predictions on whole slides</span></h1>
+  <nav>
+    <a href="https://arxiv.org/abs/2611.26316">Paper</a>
+    <a href="https://github.com/eshasadia/C-LITE">Code</a>
+    <a href="https://huggingface.co/eshasadia/C-LiTE">Weights</a>
+    <a href="https://www.ebi.ac.uk/biostudies/studies/S-BSST3558">Pre-training data</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <aside>
+    <section>
+      <h2>Held-out slides</h2>
+      <ul class="slides" id="slides"></ul>
+    </section>
+
+    <section>
+      <h2>Layer</h2>
+      <div class="seg">
+        <button id="btn-pred" aria-pressed="true">Cell types</button>
+        <button id="btn-clus" aria-pressed="false">Clusters</button>
+      </div>
+      <p class="hint" id="layerHint"></p>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <div class="seg">
+        <button id="btn-ov" aria-pressed="true">Overlay</button>
+        <button id="btn-he" aria-pressed="false">H&amp;E only</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Opacity <span class="val" id="opv">80%</span></h2>
+      <input type="range" id="op" min="0" max="100" value="80" aria-label="Overlay opacity">
+    </section>
+
+    <section id="refSection">
+      <h2>Reference</h2>
+      <div class="seg"><button id="btn-ref" aria-pressed="false">Show reference</button></div>
+      <p class="hint">Opens the reference annotations in a second panel. Both panels pan and zoom together.</p>
+    </section>
+
+    <section>
+      <h2 id="legendTitle">Cell types</h2>
+      <ul class="legend" id="legend"></ul>
+      <p class="hint" id="legendNote">Click a row to show or hide that class.</p>
+    </section>
+  </aside>
+
+  <div class="stage" id="stage">
+    <div class="pane" id="panePred"><div class="tag" id="tagPred"></div><div class="osd" id="osdPred"></div><div class="scale" id="scalePred"></div></div>
+    <div class="pane" id="paneRef"><div class="tag" id="tagRef"></div><div class="osd" id="osdRef"></div></div>
+  </div>
+</div>
+
+<script>
+const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.1/build/openseadragon/images/";
+const HINTS = {
+  pred: "Each nucleus is coloured by the class a linear probe predicts from its frozen C-LiTE embedding.",
+  predMissing: "No cell-type predictions yet. They need a linear probe trained on labelled cells; these are the classes it will predict.",
+  clusters: "K-means on the frozen C-LiTE embeddings, with no labels. Cells with similar features share a colour."
+};
+
+/* The cell-type classes the probe will predict. Colours match render_slide.py. */
+const PLANNED_CLASSES = [
+  { name: "Tumor", color: "#e8262b" }, { name: "Epithelium", color: "#ff9f0a" },
+  { name: "Stroma", color: "#18b05a" }, { name: "Endothelium", color: "#00a3d9" },
+  { name: "Lymphocyte", color: "#2f6bff" }, { name: "Plasma cell", color: "#8a4dff" },
+  { name: "Macrophage", color: "#00c2b8" }
+];
+
+const state = { samples: [], cur: null, layer: "pred", overlay: true, showRef: false, hidden: new Set(), syncing: false };
+const V = { pred: { viewer: null, item: null }, ref: { viewer: null, item: null } };
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString("en-GB");
+
+function opacity(){ return state.overlay ? $("op").value / 100 : 0; }
+function hasLayer(k){ return !!(state.cur && state.cur.layers[k]); }
+
+/* ---------- legend */
+function renderLegend(){
+  const L = state.cur.layers[state.layer];
+  if (!L){  // cell types not predicted yet: list the planned classes, no counts
+    $("legendTitle").textContent = "Cell types (planned)";
+    $("legend").innerHTML = PLANNED_CLASSES.map(e =>
+      `<li style="cursor:default"><i style="background:${e.color}"></i><span>${e.name}</span><span class="n">—</span></li>`).join("");
+    $("legendNote").textContent = "Not predicted yet.";
+    return;
+  }
+  $("legendNote").textContent = "Click a row to show or hide that class.";
+  $("legendTitle").textContent = L.label;
+  const max = Math.max(1, ...L.legend.map(e => e.n));
+  $("legend").innerHTML = L.legend.map(e => `
+    <li data-name="${e.name}" class="${state.hidden.has(e.name) ? "off" : ""}">
+      <i style="background:${e.color}"></i><span>${e.name}</span><span class="n">${fmt(e.n)}</span>
+      <span class="bar"><b style="width:${(100 * e.n / max).toFixed(1)}%;background:${e.color}"></b></span>
+    </li>`).join("");
+  document.querySelectorAll("#legend li").forEach(li => li.onclick = () => {
+    const n = li.dataset.name;
+    state.hidden.has(n) ? state.hidden.delete(n) : state.hidden.add(n);
+    applyClassFilter();
+    renderLegend();
+  });
+}
+
+/* Per-class visibility. Tiles are pre-rendered, so hidden classes are cleared from each overlay tile
+   as it is drawn. That edits the tile cache, so a change reloads the overlay with fresh tiles. */
+function applyClassFilter(){
+  if (V.pred.viewer) addLayer("pred", state.layer);
+  if (V.ref.viewer) addLayer("ref", "gt");
+}
+function hexToRgb(h){ h = h.replace("#",""); return [0,2,4].map(i => parseInt(h.substr(i,2),16)); }
+function installFilter(viewer){
+  viewer.addHandler("tile-drawing", e => {
+    if (!state.hidden.size || e.tile.__filtered || e.tiledImage === viewer.world.getItemAt(0)) return;
+    e.tile.__filtered = true;
+    const L = state.cur.layers[e.tiledImage.__layerKey];
+    if (!L) return;
+    const off = L.legend.filter(x => state.hidden.has(x.name)).map(x => hexToRgb(x.color));
+    if (!off.length) return;
+    const ctx = e.rendered, c = ctx.canvas;
+    const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4){
+      if (!d[i+3]) continue;
+      for (const [r,g,b] of off){
+        // fill pixels match the colour exactly; outline pixels are 0.55x the colour
+        if ((Math.abs(d[i]-r) < 10 && Math.abs(d[i+1]-g) < 10 && Math.abs(d[i+2]-b) < 10) ||
+            (Math.abs(d[i]-r*.55) < 10 && Math.abs(d[i+1]-g*.55) < 10 && Math.abs(d[i+2]-b*.55) < 10)){ d[i+3] = 0; break; }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+
+/* ---------- viewers */
+function makeViewer(which, layerKey){
+  const v = OpenSeadragon({
+    id: which === "pred" ? "osdPred" : "osdRef", prefixUrl: OSD_IMG,
+    tileSources: `slides/${state.cur.id}_he.dzi`,
+    showNavigator: which === "pred", navigatorPosition: "BOTTOM_RIGHT",
+    maxZoomPixelRatio: 3, visibilityRatio: 1, constrainDuringPan: true, crossOriginPolicy: "Anonymous",
+    navigationControlAnchor: OpenSeadragon.ControlAnchor.TOP_RIGHT,
+    gestureSettingsMouse: { clickToZoom: false }
+  });
+  installFilter(v);
+  v.addOnceHandler("open", () => {
+    addLayer(which, layerKey);
+    if (which === "ref"){ syncFrom("pred"); bindSync(); }
+  });
+  if (which === "pred"){ v.addHandler("animation", updateScale); v.addHandler("open", updateScale); }
+  V[which].viewer = v;
+}
+function addLayer(which, key){
+  const v = V[which].viewer;
+  if (V[which].item){ v.world.removeItem(V[which].item); V[which].item = null; }
+  if (!hasLayer(key)) return;
+  v.addTiledImage({ tileSource: `slides/${state.cur.id}_${key}.dzi`, opacity: opacity(),
+    success: e => { e.item.__layerKey = key; V[which].item = e.item; } });
+}
+function destroy(which){ if (V[which].viewer){ V[which].viewer.destroy(); V[which] = { viewer: null, item: null }; } }
+
+function syncFrom(src){
+  const a = V[src].viewer, b = V[src === "pred" ? "ref" : "pred"].viewer;
+  if (!a || !b || state.syncing) return;
+  state.syncing = true;
+  b.viewport.zoomTo(a.viewport.getZoom(), null, true);
+  b.viewport.panTo(a.viewport.getCenter(), true);
+  state.syncing = false;
+}
+function bindSync(){
+  ["pred","ref"].forEach(k => ["zoom","pan"].forEach(ev =>
+    V[k].viewer.addHandler(ev, () => syncFrom(k))));
+}
+
+/* scale bar from the slide's microns-per-pixel */
+function updateScale(){
+  const v = V.pred.viewer, s = state.cur;
+  if (!v || !s.mpp || !v.world.getItemAt(0)) return;
+  const screenPxPerImgPx = v.world.getItemAt(0).viewportToImageZoom(v.viewport.getZoom(true));
+  const umPerScreenPx = s.mpp / screenPxPerImgPx;
+  const target = 110 * umPerScreenPx;
+  const nice = [1,2,5,10,20,50,100,200,500,1000,2000,5000].find(n => n >= target * .5) || 5000;
+  const px = nice / umPerScreenPx;
+  $("scalePred").innerHTML = `${nice >= 1000 ? nice/1000 + " mm" : nice + " µm"}<div style="width:${px.toFixed(0)}px"></div>`;
+}
+
+/* ---------- UI */
+function labels(){
+  const s = state.cur, L = s.layers[state.layer];
+  $("tagPred").textContent = L ? `C-LiTE ${L.label.toLowerCase()} — ${fmt(L.count)} nuclei`
+    : state.layer === "pred" ? "Cell types — not predicted yet" : "H&E";
+  if (s.layers.gt) $("tagRef").textContent = `${s.layers.gt.label} — ${fmt(s.layers.gt.count)} cells`;
+  $("layerHint").textContent = L && L.note ? L.note
+    : !L && state.layer === "pred" ? HINTS.predMissing : HINTS[state.layer];
+  $("btn-clus").disabled = !hasLayer("clusters");
+  $("refSection").style.display = hasLayer("gt") ? "" : "none";
+}
+
+function open(sample){
+  state.cur = sample; state.hidden.clear();
+  if (!hasLayer(state.layer)) state.layer = hasLayer("pred") ? "pred" : "clusters";
+  if (!hasLayer("gt") && state.showRef) toggleRef();
+  document.querySelectorAll("#slides button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === sample.id));
+  setPressed();
+  labels(); renderLegend();
+  destroy("pred"); destroy("ref");
+  makeViewer("pred", state.layer);
+  if (state.showRef) makeViewer("ref", "gt");
+  history.replaceState(null, "", `#${encodeURIComponent(sample.id)}`);
+}
+
+function setPressed(){
+  $("btn-pred").setAttribute("aria-pressed", state.layer === "pred");
+  $("btn-clus").setAttribute("aria-pressed", state.layer === "clusters");
+  $("btn-ov").setAttribute("aria-pressed", state.overlay);
+  $("btn-he").setAttribute("aria-pressed", !state.overlay);
+}
+
+function setLayer(k){
+  if (k === state.layer || (k !== "pred" && !hasLayer(k))) return;
+  state.layer = k; state.hidden.clear();
+  setPressed(); labels(); renderLegend();
+  addLayer("pred", k);
+}
+
+function setOverlay(on){
+  state.overlay = on; setPressed();
+  [V.pred, V.ref].forEach(v => v.item && v.item.setOpacity(opacity()));
+}
+
+function toggleRef(){
+  state.showRef = !state.showRef;
+  $("btn-ref").setAttribute("aria-pressed", state.showRef);
+  $("btn-ref").textContent = state.showRef ? "Hide reference" : "Show reference";
+  $("paneRef").style.display = state.showRef ? "block" : "none";
+  if (state.showRef) makeViewer("ref", "gt"); else destroy("ref");
+}
+
+$("op").addEventListener("input", e => {
+  $("opv").textContent = e.target.value + "%";
+  if (!state.overlay) setOverlay(true);
+  [V.pred, V.ref].forEach(v => v.item && v.item.setOpacity(opacity()));
+});
+$("btn-pred").onclick = () => setLayer("pred");
+$("btn-clus").onclick = () => setLayer("clusters");
+$("btn-ov").onclick = () => setOverlay(true);
+$("btn-he").onclick = () => setOverlay(false);
+$("btn-ref").onclick = toggleRef;
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "o") setOverlay(!state.overlay);
+  if (e.key === "c") setLayer(state.layer === "pred" ? "clusters" : "pred");
+});
+
+fetch("slides/samples.json").then(r => r.json()).then(list => {
+  state.samples = list;
+  if (!list.length) throw new Error("empty");
+  $("slides").innerHTML = list.map(s => `<li><button data-id="${s.id}">${s.name}
+      <small>${s.subtitle ? s.subtitle + " · " : ""}${fmt(s.nuclei)} nuclei</small></button></li>`).join("");
+  document.querySelectorAll("#slides button").forEach(b =>
+    b.onclick = () => open(list.find(s => s.id === b.dataset.id)));
+  const fromHash = list.find(s => s.id === decodeURIComponent(location.hash.slice(1)));
+  open(fromHash || list[0]);
+}).catch(() => {
+  $("stage").innerHTML = `<div class="empty">No slides yet. Run <code>scripts/run_wsi.py</code> and
+    <code>scripts/render_slide.py</code> to add one to <code>docs/slides/</code>.</div>`;
+});
+</script>
+</body>
+</html>
